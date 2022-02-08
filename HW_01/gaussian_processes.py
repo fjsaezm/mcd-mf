@@ -130,6 +130,7 @@ def simulate_gp(
     
     t_xs, t_ys = np.meshgrid(t, t, sparse=True)
     kernel_matrix = kernel_fn(t_xs, t_ys)
+    print(t_xs.shape, t_ys.shape, kernel_matrix.shape)
     L = cholesky(kernel_matrix)
     
     Z = np.random.rand(M, n_times, n_times)
