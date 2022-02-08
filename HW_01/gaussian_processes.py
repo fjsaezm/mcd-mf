@@ -12,7 +12,7 @@ from typing import Callable, Tuple
 
 import numpy as np
 from scipy.spatial import distance
-
+from numpy.linalg import cholesky
 
 def rbf_kernel(
     X: np.ndarray,
@@ -69,7 +69,7 @@ def simulate_gp(
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Simulate a Gaussian process.
 
-        X(t) ~ GP(mean_fn,kernel_fn)
+        X(t) ~ GP(mean_fn, kernel_fn)
 
     Parameters
     ----------
@@ -124,9 +124,17 @@ def simulate_gp(
     #  Do not use numpy.random.multivariate_normal
     #  Use np.linalg.svd
     #
-
-    <YOUR CODE HERE>
-
+    
+    n_times = len(t)
+    mean_vector = mean_fn(t)
+    
+    t_xs, t_ys = np.meshgrid(t, t, sparse=True)
+    kernel_matrix = kernel_fn(t_xs, t_ys)
+    L = cholesky(kernel_matrix)
+    
+    Z = np.random.rand(M, n_times, n_times)
+    X = [ mean_vector + L @ Z_slice for Z_slice in Z ]
+    
     return X, mean_vector, kernel_matrix
 
 
@@ -210,7 +218,7 @@ def simulate_conditional_gp(
     # NOTE Use 'multivariate_normal' from numpy with "'method = 'svd'".
     # 'svd' is slower, but numerically more robust than 'cholesky'
 
-    <YOUR CODE HERE>
+    raise NotImplementedError
 
     return X, mean_vector, kernel_matrix
 
@@ -269,7 +277,7 @@ def gp_regression(
     # NOTE use 'np.linalg.solve' instead of inverting the matrix.
     # This procedure is numerically more robust.
 
-    <YOUR CODE HERE>
+    raise NotImplementedError
 
     return prediction_mean, prediction_variance
 
