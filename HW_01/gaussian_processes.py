@@ -11,8 +11,9 @@ from __future__ import annotations
 from typing import Callable, Tuple
 
 import numpy as np
-from scipy.spatial import distance
 from numpy.linalg import cholesky
+
+from scipy.linalg import cholesky
 
 def rbf_kernel(
     X: np.ndarray,
@@ -130,9 +131,14 @@ def simulate_gp(
     
     t_xs, t_ys = np.meshgrid(t, t, sparse=True)
     kernel_matrix = kernel_fn(t_xs, t_ys)
-    print(t_xs.shape, t_ys.shape, kernel_matrix.shape)
-    L = cholesky(kernel_matrix)
     
+    try:
+        L = cholesky(kernel_matrix)
+    except:
+        u, s, vh = np.linalg.svd(kernel_matrix)
+        L = u @ np.diag(np.sqrt(s))
+        
+        
     Z = np.random.rand(M, n_times, n_times)
     X = [ mean_vector + L @ Z_slice for Z_slice in Z ]
     
