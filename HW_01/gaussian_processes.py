@@ -120,27 +120,24 @@ def simulate_gp(
     >>> _= plt.title('Standard Brownian Bridge process')
     >>> plt.show()
     """
-    #  NOTE Use np.meshgrid for the arguments of
-    #  kernel_fn to compute the kernel matrix.
-    #  Do not use numpy.random.multivariate_normal
-    #  Use np.linalg.svd
-    #
-    
+    # Compute mean
     n_times = len(t)
     mean_vector = mean_fn(t)
     
+    # Compute kernel matrix using a grid of times
     t_xs, t_ys = np.meshgrid(t, t, sparse=True)
     kernel_matrix = kernel_fn(t_xs, t_ys)
     
-    try:
-        L = cholesky(kernel_matrix)
-    except:
-        u, s, vh = np.linalg.svd(kernel_matrix)
-        L = u @ np.diag(np.sqrt(s))
-        
-        
-    Z = np.random.rand(M, n_times, n_times)
-    X = [ mean_vector + L @ Z_slice for Z_slice in Z ]
+    # Use the SVD to compute the L matrix instead
+    # of using the cholemsky decomposition directly since
+    # the matrix is not def. positive.
+    U, lambda_dig, V = np.linalg.svd(kernel_matrix)
+    Lambda = np.diag(np.sqrt(lambda_dig))
+    L = Lambda @ U.T
+    
+    # Compute the trayectories
+    Z = np.random.rand(M, n_times)
+    X = mean_vector + Z @ L
     
     return X, mean_vector, kernel_matrix
 
