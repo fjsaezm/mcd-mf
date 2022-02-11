@@ -11,9 +11,35 @@ from __future__ import annotations
 from typing import Callable, Tuple
 
 import numpy as np
-from numpy.linalg import cholesky
+from scipy.spatial import distance
 
-from scipy.linalg import cholesky
+def compute_kernel_matrix(
+    kernel_fn: Callable[[np.ndarray], np.ndarray],
+    t1: np.ndarray,
+    t2: np.ndarray,
+) -> np.ndarray:
+    """
+    Evaluates the kernel function provided in the grid of times
+    created by the two times vector given.
+    """
+    t_xs, t_ys = np.meshgrid(t1, t2, sparse=True)
+    return kernel_fn(t_xs, t_ys).T
+
+
+def compute_multidimensional_kernel_matrix(
+    kernel_fn: Callable[[np.ndarray], np.ndarray],
+    X1: np.ndarray,
+    X2: np.ndarray,
+) -> np.ndarray:
+    """
+    Evaluates the kernel function provided in all the
+    possible pairs of values from X1 and X2.
+    """
+    return np.array([
+        [ kernel_fn(x1, x2) for x1 in X1 ]
+        for x2 in X2
+    ]).T
+
 
 def rbf_kernel(
     X: np.ndarray,
@@ -124,13 +150,12 @@ def simulate_gp(
     n_times = len(t)
     mean_vector = mean_fn(t)
     
-    # Compute kernel matrix using a grid of times
-    t_xs, t_ys = np.meshgrid(t, t, sparse=True)
-    kernel_matrix = kernel_fn(t_xs, t_ys)
+    # Compute kernel matrix
+    kernel_matrix = compute_kernel_matrix(kernel_fn, t, t)
     
     # Use the SVD to compute the L matrix instead
     # of using the cholemsky decomposition directly since
-    # the matrix is not def. positive.
+    # the matrix is not definite positive.
     U, lambda_dig, V = np.linalg.svd(kernel_matrix)
     Lambda = np.diag(np.sqrt(lambda_dig))
     L = Lambda @ U.T
@@ -152,7 +177,7 @@ def simulate_conditional_gp(
 ) -> np.ndarray:
     """Simulate a Gaussian process conditined to observed values.
 
-        X(t) ~ GP(mean_fn,kernel_fn)
+        X(t) ~ GP(mean_fn, kernel_fn)
 
         condition to having observed  X(t_obs) = x_obs at t_obs
 
@@ -219,11 +244,30 @@ def simulate_conditional_gp(
     >>> _ =  plt.ylabel('B(t)')
 
     """
-    # NOTE Use 'multivariate_normal' from numpy with "'method = 'svd'".
-    # 'svd' is slower, but numerically more robust than 'cholesky'
-
-    raise NotImplementedError
-
+    # Compute mean
+    mean_vector = mean_fn(t)
+    
+    # Compute kernel matrix using a grid of times
+    kernel_matrix = compute_kernel_matrix(kernel_fn, t, t)
+    
+    # Compute the kernel matrix of the observations
+    kernel_matrix_obs = compute_kernel_matrix(kernel_fn, t_obs, t_obs)
+    
+    # Compute the crossed covariance matrix using t and t_obs
+    kernel_matrix_t_and_t_obs = compute_kernel_matrix(kernel_fn, t, t_obs)
+    
+    # Compute the conditional mean
+    contional_mean_vector = mean_vector + kernel_matrix_t_and_t_obs @ \
+        np.linalg.solve(kernel_matrix_obs, x_obs - mean_fn(t_obs))
+        
+    # Compute the conditional covariance matrix
+    conditional_kernel_matrix = kernel_matrix - kernel_matrix_t_and_t_obs @ \
+        np.linalg.solve(kernel_matrix_obs, compute_kernel_matrix(kernel_fn, t_obs, t)) 
+    
+    # Compute the trayectories
+    X = np.random.default_rng().multivariate_normal(
+        contional_mean_vector, conditional_kernel_matrix, size=M, method='svd')
+    
     return X, mean_vector, kernel_matrix
 
 
@@ -239,13 +283,13 @@ def gp_regression(
     Parameters
     ----------
     X:
-        :math:`N \times D` data matrix for training
+        NxD data matrix for training
 
     y:
         vector of output values
 
     X_test:
-        :math:`L \times D` data matrix for testing.
+        LxD data matrix for testing.
 
     kernel_fn:
         Kernel (covariance) function.
@@ -277,12 +321,23 @@ def gp_regression(
     >>> print(predictions)
     [1.00366515 2.02856104]
     """
+    # Compute kernel matrix using a grid of times
+    kernel_matrix = kernel_fn(X, X)
+    
+    # Compute the crossed covariance matrix using X and X_test
+    kernel_matrix_X_test_and_X = kernel_fn(X_test, X)
+    
+    # Compute the noise matrix
+    noise_matrix = sigma2_noise*np.identity(len(X))
 
-    # NOTE use 'np.linalg.solve' instead of inverting the matrix.
-    # This procedure is numerically more robust.
-
-    raise NotImplementedError
-
+    # Compute the conditional mean
+    prediction_mean = kernel_matrix_X_test_and_X @ \
+        np.linalg.solve(kernel_matrix + noise_matrix, y)
+        
+    # Compute the conditional covariance matprediction_variancerix
+    prediction_variance = kernel_fn(X_test, X_test) - kernel_matrix_X_test_and_X @ \
+        np.linalg.solve(kernel_matrix + noise_matrix, kernel_fn(X, X_test))
+    
     return prediction_mean, prediction_variance
 
 
