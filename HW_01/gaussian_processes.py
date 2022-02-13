@@ -3,6 +3,8 @@
 Simulate Gaussian processes.
 
 @author: <alberto.suarez@uam.es>
+         <José Antonio Álvarez Ocete>
+         <Francisco Javier Sáez Maldonado>
 """
 # Load packages
 
@@ -13,6 +15,7 @@ from typing import Callable, Tuple
 import numpy as np
 from scipy.spatial import distance
 
+
 def compute_kernel_matrix(
     kernel_fn: Callable[[np.ndarray], np.ndarray],
     t1: np.ndarray,
@@ -22,23 +25,9 @@ def compute_kernel_matrix(
     Evaluates the kernel function provided in the grid of times
     created by the two times vector given.
     """
-    t_xs, t_ys = np.meshgrid(t1, t2, sparse=True)
-    return kernel_fn(t_xs, t_ys).T
-
-
-def compute_multidimensional_kernel_matrix(
-    kernel_fn: Callable[[np.ndarray], np.ndarray],
-    X1: np.ndarray,
-    X2: np.ndarray,
-) -> np.ndarray:
-    """
-    Evaluates the kernel function provided in all the
-    possible pairs of values from X1 and X2.
-    """
-    return np.array([
-        [ kernel_fn(x1, x2) for x1 in X1 ]
-        for x2 in X2
-    ]).T
+    t_xs, t_ys = np.meshgrid(t1, t2, indexing='ij')
+    kernel_matrix = kernel_fn(t_xs, t_ys)
+    return kernel_matrix
 
 
 def rbf_kernel(
@@ -146,24 +135,25 @@ def simulate_gp(
     >>> _= plt.title('Standard Brownian Bridge process')
     >>> plt.show()
     """
+
     # Compute mean
     n_times = len(t)
     mean_vector = mean_fn(t)
-    
+
     # Compute kernel matrix
     kernel_matrix = compute_kernel_matrix(kernel_fn, t, t)
-    
+
     # Use the SVD to compute the L matrix instead
     # of using the cholemsky decomposition directly since
     # the matrix is not definite positive.
     U, lambda_dig, V = np.linalg.svd(kernel_matrix)
-    Lambda = np.diag(np.sqrt(lambda_dig))
+    Lambda = np.sqrt(np.diag(lambda_dig))
     L = Lambda @ U.T
-    
+
     # Compute the trayectories
-    Z = np.random.rand(M, n_times)
+    Z = np.random.randn(M, n_times)
     X = mean_vector + Z @ L
-    
+
     return X, mean_vector, kernel_matrix
 
 
@@ -246,28 +236,29 @@ def simulate_conditional_gp(
     """
     # Compute mean
     mean_vector = mean_fn(t)
-    
+
     # Compute kernel matrix using a grid of times
     kernel_matrix = compute_kernel_matrix(kernel_fn, t, t)
-    
+
     # Compute the kernel matrix of the observations
     kernel_matrix_obs = compute_kernel_matrix(kernel_fn, t_obs, t_obs)
-    
+
     # Compute the crossed covariance matrix using t and t_obs
     kernel_matrix_t_and_t_obs = compute_kernel_matrix(kernel_fn, t, t_obs)
-    
+
     # Compute the conditional mean
     contional_mean_vector = mean_vector + kernel_matrix_t_and_t_obs @ \
         np.linalg.solve(kernel_matrix_obs, x_obs - mean_fn(t_obs))
-        
+
     # Compute the conditional covariance matrix
     conditional_kernel_matrix = kernel_matrix - kernel_matrix_t_and_t_obs @ \
-        np.linalg.solve(kernel_matrix_obs, compute_kernel_matrix(kernel_fn, t_obs, t)) 
-    
+        np.linalg.solve(kernel_matrix_obs,
+                        compute_kernel_matrix(kernel_fn, t_obs, t))
+
     # Compute the trayectories
     X = np.random.default_rng().multivariate_normal(
         contional_mean_vector, conditional_kernel_matrix, size=M, method='svd')
-    
+
     return X, mean_vector, kernel_matrix
 
 
@@ -323,21 +314,21 @@ def gp_regression(
     """
     # Compute kernel matrix using a grid of times
     kernel_matrix = kernel_fn(X, X)
-    
+
     # Compute the crossed covariance matrix using X and X_test
     kernel_matrix_X_test_and_X = kernel_fn(X_test, X)
-    
+
     # Compute the noise matrix
     noise_matrix = sigma2_noise*np.identity(len(X))
 
     # Compute the conditional mean
     prediction_mean = kernel_matrix_X_test_and_X @ \
         np.linalg.solve(kernel_matrix + noise_matrix, y)
-        
+
     # Compute the conditional covariance matprediction_variancerix
     prediction_variance = kernel_fn(X_test, X_test) - kernel_matrix_X_test_and_X @ \
         np.linalg.solve(kernel_matrix + noise_matrix, kernel_fn(X, X_test))
-    
+
     return prediction_mean, prediction_variance
 
 
