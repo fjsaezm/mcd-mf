@@ -24,10 +24,36 @@ def compute_kernel_matrix(
     """
     Evaluates the kernel function provided in the grid of times
     created by the two times vector given.
+    
+    Parameters
+    ----------
+    t :
+        First array of values with shape (N,).
+    s :
+        Second array of values with shape (M,).
+        
+    Returns
+    -------
+    K :
+        Matrix resulting from applying the kernel
+        function to the input arrays, that is,
+        K[i, j] = kernel_fn(t[i], s[j]). It is an
+        np.ndarray with shape (N, M).
+        
+    Example
+    -------
+    >>> t0, t1 = (0.0, 1.0)
+    >>> t = np.linspace(t0, t1, 4)
+    >>> def kernel_fn(s,t):
+    ...     return (np.minimum(s,t) - s * t)
+    >>> print(compute_kernel_matrix(kernel_fn, t, t))
+    [[0.         0.         0.         0.        ]
+     [0.         0.22222222 0.11111111 0.        ]
+     [0.         0.11111111 0.22222222 0.        ]
+     [0.         0.         0.         0.        ]]
     """
     t_xs, t_ys = np.meshgrid(t1, t2, indexing='ij')
-    kernel_matrix = kernel_fn(t_xs, t_ys)
-    return kernel_matrix
+    return kernel_fn(t_xs, t_ys)
 
 
 def rbf_kernel(
@@ -259,7 +285,7 @@ def simulate_conditional_gp(
     X = np.random.default_rng().multivariate_normal(
         contional_mean_vector, conditional_kernel_matrix, size=M, method='svd')
 
-    return X, mean_vector, kernel_matrix
+    return X, contional_mean_vector, conditional_kernel_matrix
 
 
 def gp_regression(
