@@ -2,7 +2,7 @@ from typing import Callable, Tuple
 
 import numpy as np
 from scipy.spatial import distance
-
+from sklearn.preprocessing import normalize
 
 def linear_kernel(
     X: np.ndarray,
@@ -96,8 +96,33 @@ def kernel_pca(
     are normalized in l2.
 
     """
-
-    raise NotImplementedError
-    # NOTE <YOUR CODE HERE>.
+    
+    # Create NxN ones matrix
+    N = len(X)
+    ones_matrix = 1.0 * np.ones((N, N))
+    
+    # Compute the Gram matrix for the train observations
+    K = kernel(X, X)
+    
+    # Compute the Gram matrix of the centered kernel
+    K_tilda = K - K @ ones_matrix / N - ones_matrix @ K / N \
+            + ones_matrix @ K @ ones_matrix / N**2
+    
+    # Obtain the SVD decomposition of the kernel matrix
+    alpha_eigenvecs, lambda_eigenvals, V = np.linalg.svd(K_tilda, full_matrices=True)
+    
+    # Normalize the eigenvectors
+    alpha_eigenvecs = normalize(alpha_eigenvecs, axis=0)
+    
+    # Compute the Gram matrix for the test observations
+    K_test = kernel(X_test, X_test)
+    
+    # Compute the matrix K_tilda_test
+    K_tilda_test = K_test - K_test @ ones_matrix / N \
+            - ones_matrix @ K / N \
+            + ones_matrix @ K @ ones_matrix / N**2
+            
+    # Project the test observations to the found principal components
+    X_test_hat = K_tilda_test @ alpha_eigenvecs
 
     return X_test_hat, lambda_eigenvals, alpha_eigenvecs
