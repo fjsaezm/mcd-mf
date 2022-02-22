@@ -246,21 +246,3 @@ def plot_KPCA(gamma, X, y, A=1.0, lims=None):
     ax.set_xlabel(r"1st principal component in space induced by $\phi$")
     ax.set_ylabel("2nd component")
     plt.show()
-
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-
