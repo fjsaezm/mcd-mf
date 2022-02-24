@@ -162,7 +162,7 @@ class AnimationKPCA:
         gamma: float,
     ):
         ax.clear()
-        ax.set_title(r"Projection by KPCA ($\gamma=${:.3f}".format(gamma))
+        ax.set_title(r"Projection by KPCA ($\gamma=${:.3f})".format(gamma))
         ax.set_xlabel(r"1st principal component in space induced by $\phi$")
         ax.set_ylabel("2nd principal component")
         ax.set_xlim(self.xlims)
