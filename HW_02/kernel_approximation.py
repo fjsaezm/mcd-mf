@@ -182,14 +182,6 @@ class NystroemFeaturesSampler:
             self._reduced_kernel_matrix + self._reduced_kernel_matrix.T
         ) / 2.0  # enforce symmetry of kernel matrix
 
-        # Approximate the kernel matrix following Nystroem method.
-        self.approximate_kernel_matrix(X, n_features_sampled)
-
-    def approximate_kernel_matrix(
-        self, X: np.ndarray, n_features_sampled: int
-    ) -> np.ndarray:
-        """Approximate the kernel matrix using Nystroem features."""
-
         # Compute auxiliary quantities.
         self._sqrtm_pinv_reduced_kernel_matrix = sp.linalg.sqrtm(
             np.linalg.pinv(self._reduced_kernel_matrix, rcond=1.0e-6, hermitian=True)
@@ -208,7 +200,13 @@ class NystroemFeaturesSampler:
                 self._sqrtm_pinv_reduced_kernel_matrix
             )
 
-        return self._sqrtm_pinv_reduced_kernel_matrix
+    def approximate_kernel_matrix(
+        self, X: np.ndarray, n_features_sampled: int
+    ) -> np.ndarray:
+        """Approximate the kernel matrix using Nystroem features."""
+
+        X_features = self.fit_transform(X, n_features_sampled)
+        return X_features @ X_features.T
 
     def fit_transform(
         self,
@@ -232,8 +230,6 @@ class NystroemFeaturesSampler:
             self._kernel(X_prime, self._X_reduced)
             @ self._sqrtm_pinv_reduced_kernel_matrix
         )
-
-        print("X_prime_nystroem: {}".format(X_prime_nystroem.shape))
 
         return X_prime_nystroem
 
