@@ -1,4 +1,3 @@
-
 import warnings
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
@@ -9,7 +8,7 @@ import scipy as sp
 
 
 class RandomFeaturesSampler(ABC):
-    """ Base class for random feature samplers. """
+    """Base class for random feature samplers."""
 
     def __init__(self, n_random_features: int) -> None:
         self.n_random_features = n_random_features
@@ -49,13 +48,13 @@ class RandomFeaturesSampler(ABC):
         random_features:
             Array of shape (n_instances, n_random_features).
         """
-        if (self.w is None):
-            raise ValueError('Use fit_transform to initialize w.')
+        if self.w is None:
+            raise ValueError("Use fit_transform to initialize w.")
 
         n_instances, n_features = np.shape(X)
 
-        if (np.shape(self.w)[1] != n_features):
-            raise ValueError('Different # of features for X and w.')
+        if np.shape(self.w)[1] != n_features:
+            raise ValueError("Different # of features for X and w.")
 
         random_features = np.empty((n_instances, self.n_random_features))
         random_features[:, ::2] = np.cos(X @ self.w.T)
@@ -68,7 +67,7 @@ class RandomFeaturesSampler(ABC):
 
 
 class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
-    """ Random Fourier Features for the RBF kernel. """
+    """Random Fourier Features for the RBF kernel."""
 
     def __init__(self, sigma_kernel: float) -> None:
 
@@ -89,7 +88,6 @@ class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
         )
 
 
-
 class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
     """Random Fourier Features for the Matern kernel."""
 
@@ -99,7 +97,8 @@ class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
         Ref. Chapter 4 of
         Carl Edward Rasmussen and Christopher K. I. Williams. 2005.
         Gaussian Processes for Machine Learning
-        (Adaptive Computation and Machine Learning). The MIT Press. There is probably a mistake with the scale factor.
+        (Adaptive Computation and Machine Learning). The MIT Press.
+        There is probably a mistake with the scale factor.
         """
 
         self.nu = 2.0 * nu
@@ -113,7 +112,6 @@ class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
         # Scale of the Fourier tranform of the kernel
         w_mean = np.zeros(n_features)
         w_cov_matrix = self.scale**2 * np.identity(n_features)
-
 
         self.w = random_multivariate_student_t(
             w_mean,
@@ -148,21 +146,25 @@ def random_multivariate_student_t(
     X = mean + Z / np.sqrt(x)[:, np.newaxis]
     return X
 
-class NystroemFeaturesSampler():
-    """Sample Nystroem features. """
 
-    def __init__(
-        self,
-        kernel: Callable[[np.ndarray, np.ndarray], np.ndarray]
-    ) -> None:
+class NystroemFeaturesSampler:
+    """Sample Nystroem features."""
+
+    def __init__(self, kernel: Callable[[np.ndarray, np.ndarray], np.ndarray]) -> None:
         self._kernel = kernel
         self.component_indices_ = None
+
+        # J
         self._X_reduced = None
+
+        # W
         self._reduced_kernel_matrix = None
 
+        # (W+)^1/2
+        self._sqrtm_pinv_reduced_kernel_matrix = None
+
     def fit(self, X: np.ndarray, n_features_sampled: int) -> np.ndarray:
-        """Precompute auxiliary quantities for Nystroem features.
-        """
+        """Precompute auxiliary quantities for Nystroem features."""
         n_instances = len(X)
         # Sample subset of training instances.
         rng = np.random.default_rng()
@@ -175,22 +177,22 @@ class NystroemFeaturesSampler():
         self._X_reduced = X[self.component_indices_, :]
 
         # Compute reduced kernel matrix.
-        self._reduced_kernel_matrix = self._kernel(
-            self._X_reduced,
-            self._X_reduced
-        )
-
+        self._reduced_kernel_matrix = self._kernel(self._X_reduced, self._X_reduced)
         self._reduced_kernel_matrix = (
             self._reduced_kernel_matrix + self._reduced_kernel_matrix.T
         ) / 2.0  # enforce symmetry of kernel matrix
 
+        # Approximate the kernel matrix following Nystroem method.
+        self.approximate_kernel_matrix(X, n_features_sampled)
+
+    def approximate_kernel_matrix(
+        self, X: np.ndarray, n_features_sampled: int
+    ) -> np.ndarray:
+        """Approximate the kernel matrix using Nystroem features."""
+
         # Compute auxiliary quantities.
         self._sqrtm_pinv_reduced_kernel_matrix = sp.linalg.sqrtm(
-            np.linalg.pinv(
-                self._reduced_kernel_matrix,
-                rcond=1.0e-6,
-                hermitian=True
-            )
+            np.linalg.pinv(self._reduced_kernel_matrix, rcond=1.0e-6, hermitian=True)
         )
 
         # Check that complex part is negligible and eliminate it
@@ -200,44 +202,38 @@ class NystroemFeaturesSampler():
                 np.abs(np.imag(self._sqrtm_pinv_reduced_kernel_matrix))
             )
             if max_imaginary_part > threshold_imaginary_part:
-                warnings.warn(
-                    'Maximum imaginary part is {}'.format(max_imaginary_part)
-                )
+                warnings.warn("Maximum imaginary part is {}".format(max_imaginary_part))
 
             self._sqrtm_pinv_reduced_kernel_matrix = np.real(
                 self._sqrtm_pinv_reduced_kernel_matrix
             )
 
-
-    def approximate_kernel_matrix(
-        self,
-        X: np.ndarray,
-        n_features_sampled: int
-    ) -> np.ndarray:
-        """Approximate the kernel matrix using Nystroem features."""
-
-        raise NotImplementedError
-        # NOTE <YOUR CODE HERE>.
-
+        return self._sqrtm_pinv_reduced_kernel_matrix
 
     def fit_transform(
         self,
         n_features_sampled: int,
         X: np.ndarray,
-        X_prime: Optional[np.ndarray] = None
+        X_prime: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Compute Nyström features."""
         self.fit(X, n_features_sampled)
+
         if X_prime is None:
             X_prime = X
         X_prime_nystroem = self.transform(X_prime)
+
         return X_prime_nystroem
 
     def transform(self, X_prime: np.ndarray) -> np.ndarray:
         """Compute Nystroem features with precomputed quantities."""
 
-        raise NotImplementedError
-        # NOTE <YOUR CODE HERE>.
+        X_prime_nystroem = (
+            self._kernel(X_prime, self._X_reduced)
+            @ self._sqrtm_pinv_reduced_kernel_matrix
+        )
+
+        print("X_prime_nystroem: {}".format(X_prime_nystroem.shape))
 
         return X_prime_nystroem
 
@@ -252,16 +248,16 @@ def demo_kernel_approximation_features(
     n_plots = len(n_features) + 1
     fig, axes = plt.subplots(1, n_plots)
     fig.set_size_inches(15, 4)
-    font = {'fontname': 'arial', 'fontsize': 18}
+    font = {"fontname": "arial", "fontsize": 18}
 
     kernel_matrix = kernel(X, X)
     axes[0].imshow(kernel_matrix, cmap=plt.cm.Blues)
-    axes[0].set_title('Exact kernel', **font)
+    axes[0].set_title("Exact kernel", **font)
     axes[0].set_xticks([])
     axes[0].set_yticks([])
 
     for n, ax in zip(n_features, axes[1:]):
-        print('# of features = ', n)
+        print("# of features = ", n)
 
         X_features = features_sampler.fit_transform(n, X)
         kernel_matrix_approx = X_features @ X_features.T
@@ -272,12 +268,12 @@ def demo_kernel_approximation_features(
         err_mean = np.mean(np.abs(err_approx))
         err_max = np.max(np.abs(err_approx))
 
-        ax.set_xlabel('err (mean) = {:.4f} \n err (max) = {:.4f}'.format(
-            err_mean,
-            err_max
-        ), **font)
+        ax.set_xlabel(
+            "err (mean) = {:.4f} \n err (max) = {:.4f}".format(err_mean, err_max),
+            **font
+        )
 
-        ax.set_title('{} features'.format(n), **font)
+        ax.set_title("{} features".format(n), **font)
 
         ax.set_xticks([])
         ax.set_yticks([])
@@ -285,7 +281,7 @@ def demo_kernel_approximation_features(
     plt.show()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
     """
     import matplotlib.pyplot as plt
@@ -340,7 +336,7 @@ if __name__ == '__main__':
     # X = X[np.argsort(y)]
 
     # Reshape if necessary
-    if (X.ndim == 1):
+    if X.ndim == 1:
         X = X[:, np.newaxis]
 
     # Kernel parameters
@@ -352,7 +348,6 @@ if __name__ == '__main__':
     # Kernel function
     def kernel(X, Y):
         return rbf_kernel(X, Y, gamma=gamma)
-
 
     nystroem_features = NystroemFeaturesSampler(kernel)
 
