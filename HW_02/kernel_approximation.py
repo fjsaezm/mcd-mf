@@ -1,6 +1,7 @@
 import warnings
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
+from sklearn.metrics.pairwise import rbf_kernel
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -69,7 +70,7 @@ class RandomFeaturesSampler(ABC):
 class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
     """Random Fourier Features for the RBF kernel."""
 
-    def __init__(self, sigma_kernel: float) -> None:
+    def __init__(self, sigma_kernel: float = 1.0) -> None:
 
         self.sigma = 1.0 / sigma_kernel
         self.n_random_features = None
@@ -91,7 +92,9 @@ class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
 class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
     """Random Fourier Features for the Matern kernel."""
 
-    def __init__(self, length_scale: float, nu: float) -> None:
+    def __init__(self,
+                 length_scale: float = 1.0, 
+                 nu: float = 1.0) -> None:
         """The Fourier transform of the Matérn kernel is a
         Student's t distribution with twice the degrees of freedom.
         Ref. Chapter 4 of
@@ -150,7 +153,7 @@ def random_multivariate_student_t(
 class NystroemFeaturesSampler:
     """Sample Nystroem features."""
 
-    def __init__(self, kernel: Callable[[np.ndarray, np.ndarray], np.ndarray]) -> None:
+    def __init__(self, kernel: Callable[[np.ndarray, np.ndarray], np.ndarray] = rbf_kernel ) -> None:
         self._kernel = kernel
         self.component_indices_ = None
 
@@ -193,8 +196,8 @@ class NystroemFeaturesSampler:
             max_imaginary_part = np.max(
                 np.abs(np.imag(self._sqrtm_pinv_reduced_kernel_matrix))
             )
-            if max_imaginary_part > threshold_imaginary_part:
-                warnings.warn("Maximum imaginary part is {}".format(max_imaginary_part))
+            #if max_imaginary_part > threshold_imaginary_part:
+                #warnings.warn("Maximum imaginary part is {}".format(max_imaginary_part))
 
             self._sqrtm_pinv_reduced_kernel_matrix = np.real(
                 self._sqrtm_pinv_reduced_kernel_matrix
@@ -275,6 +278,33 @@ def demo_kernel_approximation_features(
         ax.set_yticks([])
         plt.tight_layout()
     plt.show()
+
+
+def plot_kernel_error(
+    X: np.ndarray,
+    kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    features_sampler: Union[RandomFeaturesSampler, NystroemFeaturesSampler],
+    n_features: np.array,
+    kernel_name: str,
+) -> None:
+
+    # Initialize variables
+    kernel_matrix = kernel(X, X)
+    errors = np.array([], dtype=float)
+
+    # Compute the mean error for each umber of features 
+    for n_f in n_features:
+        X_features = features_sampler.fit_transform(n_f, X)
+        kernel_matrix_approx = X_features @ X_features.T
+        mean_error = np.mean(np.abs(kernel_matrix - kernel_matrix_approx))
+        errors = np.append(errors, mean_error)
+
+    # Plotting
+    _, ax = plt.subplots(1, 1, figsize=(10,6))
+    font = {"fontname": "arial", "fontsize": 18}
+    ax.plot(n_features, errors,
+            color='deepskyblue', label=r"kernel error")
+    ax.set_title("{} kernel error study".format(kernel_name), **font)
 
 
 if __name__ == "__main__":
