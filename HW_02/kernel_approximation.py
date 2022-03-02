@@ -1,6 +1,7 @@
 import warnings
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
+from sklearn.metrics.pairwise import rbf_kernel
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -69,7 +70,7 @@ class RandomFeaturesSampler(ABC):
 class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
     """Random Fourier Features for the RBF kernel."""
 
-    def __init__(self, sigma_kernel: float) -> None:
+    def __init__(self, sigma_kernel: float = 1.0) -> None:
 
         self.sigma = 1.0 / sigma_kernel
         self.n_random_features = None
@@ -91,7 +92,9 @@ class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
 class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
     """Random Fourier Features for the Matern kernel."""
 
-    def __init__(self, length_scale: float, nu: float) -> None:
+    def __init__(self,
+                 length_scale: float = 1.0, 
+                 nu: float = 1.0) -> None:
         """The Fourier transform of the Matérn kernel is a
         Student's t distribution with twice the degrees of freedom.
         Ref. Chapter 4 of
@@ -150,7 +153,7 @@ def random_multivariate_student_t(
 class NystroemFeaturesSampler:
     """Sample Nystroem features."""
 
-    def __init__(self, kernel: Callable[[np.ndarray, np.ndarray], np.ndarray]) -> None:
+    def __init__(self, kernel: Callable[[np.ndarray, np.ndarray], np.ndarray] = ) -> None:
         self._kernel = kernel
         self.component_indices_ = None
 
