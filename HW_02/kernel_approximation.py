@@ -1,14 +1,18 @@
 import warnings
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union
-from sklearn.metrics.pairwise import rbf_kernel
+from sklearn.gaussian_process.kernels import RBF
+
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy as sp
+import scipy as sp 
+
+# needed for default implementation of set_params
+from sklearn.base import BaseEstimator, TransformerMixin
 
 
-class RandomFeaturesSampler(ABC):
+class RandomFeaturesSampler(ABC, BaseEstimator, TransformerMixin):
     """Base class for random feature samplers."""
 
     def __init__(self, n_random_features: int) -> None:
@@ -19,18 +23,17 @@ class RandomFeaturesSampler(ABC):
         pass
 
     @abstractmethod
-    def fit(self, n_features: int) -> np.ndarray:
+    def fit(self, X: np.ndarray) -> np.ndarray:
         """Initialize w's for the random features.
         This should be implemented for each kernel."""
         pass
 
     def fit_transform(
         self,
-        n_random_features: int,
         X: np.ndarray,
+        X_prime: Optional [np.ndarray] = None
     ) -> np.ndarray:
         """Initialize  w's (fit) & compute random features (transform)."""
-        self.n_random_features = n_random_features
         n_features = np.shape(X)[1]
         self.fit(n_features)
         return self.transform(X)
@@ -70,13 +73,14 @@ class RandomFeaturesSampler(ABC):
 class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
     """Random Fourier Features for the RBF kernel."""
 
-    def __init__(self, sigma_kernel: float = 1.0) -> None:
+    def __init__(self, sigma: float = 1.0, n_random_features : int = 100) -> None:
 
-        self.sigma = 1.0 / sigma_kernel
-        self.n_random_features = None
-        self.w = None
+        self.sigma = sigma
+        # Initialize number of random features in parent class
+        super().__init__(n_random_features) 
 
-    def fit(self, n_features: int) -> np.ndarray:
+    def fit(self,
+            n_features : int = 100) -> np.ndarray:
         """Initialize the w's for the random features."""
         w_mean = np.zeros(n_features)
         w_cov_matrix = self.sigma**2 * np.identity(n_features)
@@ -93,8 +97,9 @@ class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
     """Random Fourier Features for the Matern kernel."""
 
     def __init__(self,
-                 length_scale: float = 1.0, 
-                 nu: float = 1.0) -> None:
+                 scale: float = 1.0, 
+                 nu: float = 1.0,
+                 n_random_features : int = 100) -> None:
         """The Fourier transform of the Matérn kernel is a
         Student's t distribution with twice the degrees of freedom.
         Ref. Chapter 4 of
@@ -104,10 +109,17 @@ class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
         There is probably a mistake with the scale factor.
         """
 
-        self.nu = 2.0 * nu
-        self.scale = 1.0 / length_scale
 
-        self.n_random_features = None
+        
+        # Changed variables since they CANNNOT be modified due to sklearn GridSearch
+        #self.nu = 2.0 * nu
+        self.nu = nu 
+        # Changed name from original's author name due to incompatibility with sklearn
+        self.scale = scale
+
+        super().__init__(
+            n_random_features
+        )
         self.w = None
 
     def fit(self, n_features: int) -> np.ndarray:
@@ -150,37 +162,49 @@ def random_multivariate_student_t(
     return X
 
 
-class NystroemFeaturesSampler:
+class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
     """Sample Nystroem features."""
 
-    def __init__(self, kernel: Callable[[np.ndarray, np.ndarray], np.ndarray] = ) -> None:
-        self._kernel = kernel
+    def __init__(self, 
+                kernel: Callable[[np.ndarray, np.ndarray], np.ndarray] = RBF(),
+                n_random_features: int = 100) -> None:
+        
+        # _kernel -> kernel due to SKlearn compatibility
+        self.kernel = kernel
         self.component_indices_ = None
-
         # J
         self._X_reduced = None
-
         # W
         self._reduced_kernel_matrix = None
-
         # (W+)^1/2
         self._sqrtm_pinv_reduced_kernel_matrix = None
+        # Needed for compatibility
+        self.n_random_features = n_random_features
 
-    def fit(self, X: np.ndarray, n_features_sampled: int) -> np.ndarray:
+    def fit(self,
+            X: np.ndarray,
+            y: Optional[np.ndarray] = None # Compatibility
+            ) -> np.ndarray:
         """Precompute auxiliary quantities for Nystroem features."""
         n_instances = len(X)
+        # Check dimensions to avoid selecting more features than 
+        # possible
+        n_random_features = self.n_random_features
+        if self.n_random_features > n_instances:
+            n_random_features = n_instances
+
         # Sample subset of training instances.
         rng = np.random.default_rng()
         self.component_indices_ = rng.choice(
             range(n_instances),
-            size=n_features_sampled,
+            size=n_random_features,
             replace=False,
         )
 
         self._X_reduced = X[self.component_indices_, :]
 
         # Compute reduced kernel matrix.
-        self._reduced_kernel_matrix = self._kernel(self._X_reduced, self._X_reduced)
+        self._reduced_kernel_matrix = self.kernel(self._X_reduced, self._X_reduced)
         self._reduced_kernel_matrix = (
             self._reduced_kernel_matrix + self._reduced_kernel_matrix.T
         ) / 2.0  # enforce symmetry of kernel matrix
@@ -204,37 +228,30 @@ class NystroemFeaturesSampler:
             )
 
     def approximate_kernel_matrix(
-        self, X: np.ndarray, n_features_sampled: int
+        self, 
+        X: np.ndarray,
+        # Needed for sklearn compatibility
+        X_prime: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """Approximate the kernel matrix using Nystroem features."""
 
-        X_features = self.fit_transform(X, n_features_sampled)
+        X_features = self.fit_transform(X)
         return X_features @ X_features.T
 
     def fit_transform(
         self,
-        n_features_sampled: int,
         X: np.ndarray,
         X_prime: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Compute Nyström features."""
-        self.fit(X, n_features_sampled)
+        self.fit(X)
+        return self.transform(X)
 
-        if X_prime is None:
-            X_prime = X
-        X_prime_nystroem = self.transform(X_prime)
-
-        return X_prime_nystroem
-
-    def transform(self, X_prime: np.ndarray) -> np.ndarray:
+    def transform(self,
+                  X_prime: np.ndarray) -> np.ndarray:
         """Compute Nystroem features with precomputed quantities."""
-
-        X_prime_nystroem = (
-            self._kernel(X_prime, self._X_reduced)
-            @ self._sqrtm_pinv_reduced_kernel_matrix
-        )
-
-        return X_prime_nystroem
+        J = self.kernel(X_prime, self._X_reduced)
+        return J@self._sqrtm_pinv_reduced_kernel_matrix
 
 
 def demo_kernel_approximation_features(
