@@ -1,6 +1,6 @@
 import warnings
 from abc import ABC, abstractmethod
-from typing import Callable, Optional, Union
+from typing import Callable, Optional, Union, Type
 from sklearn.gaussian_process.kernels import RBF
 
 
@@ -108,12 +108,10 @@ class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
         (Adaptive Computation and Machine Learning). The MIT Press.
         There is probably a mistake with the scale factor.
         """
-
-
         
         # Changed variables since they CANNNOT be modified due to sklearn GridSearch
         #self.nu = 2.0 * nu
-        self.nu = nu 
+        self.nu = nu
         # Changed name from original's author name due to incompatibility with sklearn
         self.scale = scale
 
@@ -257,7 +255,8 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
 def demo_kernel_approximation_features(
     X: np.ndarray,
     kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    features_sampler: Union[RandomFeaturesSampler, NystroemFeaturesSampler],
+    features_sampler_class: Union[Type[RandomFeaturesSampler], Type[NystroemFeaturesSampler]],
+    features_sampler_kwargs: np.ndarray,
     n_features: np.array,
 ) -> None:
     """Kernel approximation using random Fourier features (RFF)."""
@@ -272,10 +271,13 @@ def demo_kernel_approximation_features(
     axes[0].set_xticks([])
     axes[0].set_yticks([])
 
-    for n, ax in zip(n_features, axes[1:]):
-        print("# of features = ", n)
+    for n_f, ax in zip(n_features, axes[1:]):
+        print("# of features = ", n_f)
 
-        X_features = features_sampler.fit_transform(n, X)
+        features_sampler = features_sampler_class(
+            **features_sampler_kwargs, n_random_features=n_f)
+
+        X_features = features_sampler.fit_transform(X)
         kernel_matrix_approx = X_features @ X_features.T
 
         ax.imshow(kernel_matrix_approx, cmap=plt.cm.Blues)
@@ -289,7 +291,7 @@ def demo_kernel_approximation_features(
             **font
         )
 
-        ax.set_title("{} features".format(n), **font)
+        ax.set_title("{} features".format(n_f), **font)
 
         ax.set_xticks([])
         ax.set_yticks([])
@@ -300,19 +302,25 @@ def demo_kernel_approximation_features(
 def plot_kernel_error(
     X: np.ndarray,
     kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    features_sampler: Union[RandomFeaturesSampler, NystroemFeaturesSampler],
-    n_features: np.array,
+    features_sampler_class: Union[Type[RandomFeaturesSampler], Type[NystroemFeaturesSampler]],
+    features_sampler_kwargs: np.ndarray,
+    n_features: np.ndarray,
     kernel_name: str,
 ) -> None:
-
     # Initialize variables
     kernel_matrix = kernel(X, X)
     errors = np.array([], dtype=float)
 
-    # Compute the mean error for each umber of features 
     for n_f in n_features:
-        X_features = features_sampler.fit_transform(n_f, X)
+        # Create sampler
+        features_sampler = features_sampler_class(
+            **features_sampler_kwargs, n_random_features=n_f)
+
+        # Compute approximation
+        X_features = features_sampler.fit_transform(X)
         kernel_matrix_approx = X_features @ X_features.T
+
+        # Compute error
         mean_error = np.mean(np.abs(kernel_matrix - kernel_matrix_approx))
         errors = np.append(errors, mean_error)
 
@@ -354,7 +362,7 @@ if __name__ == "__main__":
     n_nystroem_features = 20
 
     nystroem_sampler = NystroemFeaturesSampler(kernel)
-    nystroem_features = nystroem_sampler.fit_transform(n_nystroem_features, X)
+    nystroem_features = nystroem_sampler.fit_transform(X)
     nystroem_features_grid = nystroem_sampler.transform(grid_X)
 
     clf = svm.SVC(kernel='linear')
