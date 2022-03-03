@@ -1,3 +1,11 @@
+"""
+Author:    alberto.suarez@uam.es
+
+Coauthors: joseantonio.alvarezo@estudiante.uam.es
+           franciscojavier.saez@estudiante.uam.es
+
+"""
+
 import warnings
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, Union, Type

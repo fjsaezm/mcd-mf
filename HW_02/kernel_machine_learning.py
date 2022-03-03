@@ -1,3 +1,11 @@
+"""
+Author:    alberto.suarez@uam.es
+
+Coauthors: joseantonio.alvarezo@estudiante.uam.es
+           franciscojavier.saez@estudiante.uam.es
+
+"""
+
 from typing import Callable, Tuple
 
 import numpy as np
