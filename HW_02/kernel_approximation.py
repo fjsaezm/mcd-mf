@@ -14,7 +14,7 @@ from sklearn.gaussian_process.kernels import RBF
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy as sp 
+import scipy as sp
 
 # needed for default implementation of set_params
 from sklearn.base import BaseEstimator, TransformerMixin
@@ -37,9 +37,7 @@ class RandomFeaturesSampler(ABC, BaseEstimator, TransformerMixin):
         pass
 
     def fit_transform(
-        self,
-        X: np.ndarray,
-        X_prime: Optional [np.ndarray] = None
+        self, X: np.ndarray, X_prime: Optional[np.ndarray] = None
     ) -> np.ndarray:
         """Initialize  w's (fit) & compute random features (transform)."""
         n_features = np.shape(X)[1]
@@ -81,14 +79,13 @@ class RandomFeaturesSampler(ABC, BaseEstimator, TransformerMixin):
 class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
     """Random Fourier Features for the RBF kernel."""
 
-    def __init__(self, sigma: float = 1.0, n_random_features : int = 100) -> None:
+    def __init__(self, sigma: float = 1.0, n_random_features: int = 100) -> None:
 
         self.sigma = sigma
         # Initialize number of random features in parent class
-        super().__init__(n_random_features) 
+        super().__init__(n_random_features)
 
-    def fit(self,
-            n_features : int = 100) -> np.ndarray:
+    def fit(self, n_features: int = 100) -> np.ndarray:
         """Initialize the w's for the random features."""
         w_mean = np.zeros(n_features)
         w_cov_matrix = self.sigma**2 * np.identity(n_features)
@@ -104,10 +101,9 @@ class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
 class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
     """Random Fourier Features for the Matern kernel."""
 
-    def __init__(self,
-                 scale: float = 1.0, 
-                 nu: float = 1.0,
-                 n_random_features : int = 100) -> None:
+    def __init__(
+        self, scale: float = 1.0, nu: float = 1.0, n_random_features: int = 100
+    ) -> None:
         """The Fourier transform of the Matérn kernel is a
         Student's t distribution with twice the degrees of freedom.
         Ref. Chapter 4 of
@@ -116,16 +112,14 @@ class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
         (Adaptive Computation and Machine Learning). The MIT Press.
         There is probably a mistake with the scale factor.
         """
-        
+
         # Changed variables since they CANNNOT be modified due to sklearn GridSearch
-        #self.nu = 2.0 * nu
+        # self.nu = 2.0 * nu
         self.nu = nu
         # Changed name from original's author name due to incompatibility with sklearn
         self.scale = scale
 
-        super().__init__(
-            n_random_features
-        )
+        super().__init__(n_random_features)
         self.w = None
 
     def fit(self, n_features: int) -> np.ndarray:
@@ -171,10 +165,12 @@ def random_multivariate_student_t(
 class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
     """Sample Nystroem features."""
 
-    def __init__(self, 
-                kernel: Callable[[np.ndarray, np.ndarray], np.ndarray] = RBF(),
-                n_random_features: int = 100) -> None:
-        
+    def __init__(
+        self,
+        kernel: Callable[[np.ndarray, np.ndarray], np.ndarray] = RBF(),
+        n_random_features: int = 100,
+    ) -> None:
+
         # _kernel -> kernel due to SKlearn compatibility
         self.kernel = kernel
         self.component_indices_ = None
@@ -187,13 +183,12 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
         # Needed for compatibility
         self.n_random_features = n_random_features
 
-    def fit(self,
-            X: np.ndarray,
-            y: Optional[np.ndarray] = None # Compatibility
-            ) -> np.ndarray:
+    def fit(
+        self, X: np.ndarray, y: Optional[np.ndarray] = None  # Compatibility
+    ) -> np.ndarray:
         """Precompute auxiliary quantities for Nystroem features."""
         n_instances = len(X)
-        # Check dimensions to avoid selecting more features than 
+        # Check dimensions to avoid selecting more features than
         # possible
         n_random_features = self.n_random_features
         if self.n_random_features > n_instances:
@@ -226,18 +221,18 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
             max_imaginary_part = np.max(
                 np.abs(np.imag(self._sqrtm_pinv_reduced_kernel_matrix))
             )
-            #if max_imaginary_part > threshold_imaginary_part:
-                #warnings.warn("Maximum imaginary part is {}".format(max_imaginary_part))
+            # if max_imaginary_part > threshold_imaginary_part:
+            # warnings.warn("Maximum imaginary part is {}".format(max_imaginary_part))
 
             self._sqrtm_pinv_reduced_kernel_matrix = np.real(
                 self._sqrtm_pinv_reduced_kernel_matrix
             )
 
     def approximate_kernel_matrix(
-        self, 
+        self,
         X: np.ndarray,
         # Needed for sklearn compatibility
-        X_prime: Optional[np.ndarray] = None
+        X_prime: Optional[np.ndarray] = None,
     ) -> np.ndarray:
         """Approximate the kernel matrix using Nystroem features."""
 
@@ -253,21 +248,23 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
         self.fit(X)
         return self.transform(X)
 
-    def transform(self,
-                  X_prime: np.ndarray) -> np.ndarray:
+    def transform(self, X_prime: np.ndarray) -> np.ndarray:
         """Compute Nystroem features with precomputed quantities."""
         J = self.kernel(X_prime, self._X_reduced)
-        return J@self._sqrtm_pinv_reduced_kernel_matrix
+        return J @ self._sqrtm_pinv_reduced_kernel_matrix
 
 
 def demo_kernel_approximation_features(
     X: np.ndarray,
     kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    features_sampler_class: Union[Type[RandomFeaturesSampler], Type[NystroemFeaturesSampler]],
+    features_sampler_class: Union[
+        Type[RandomFeaturesSampler], Type[NystroemFeaturesSampler]
+    ],
     features_sampler_kwargs: np.ndarray,
     n_features: np.array,
 ) -> None:
-    """Kernel approximation using random Fourier features (RFF)."""
+    """Kernel approximation using random sampled features.
+    Either RFF or Nyström features."""
     n_plots = len(n_features) + 1
     fig, axes = plt.subplots(1, n_plots)
     fig.set_size_inches(15, 4)
@@ -283,7 +280,8 @@ def demo_kernel_approximation_features(
         print("# of features = ", n_f)
 
         features_sampler = features_sampler_class(
-            **features_sampler_kwargs, n_random_features=n_f)
+            **features_sampler_kwargs, n_random_features=n_f
+        )
 
         X_features = features_sampler.fit_transform(X)
         kernel_matrix_approx = X_features @ X_features.T
@@ -310,7 +308,9 @@ def demo_kernel_approximation_features(
 def plot_kernel_error(
     X: np.ndarray,
     kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    features_sampler_class: Union[Type[RandomFeaturesSampler], Type[NystroemFeaturesSampler]],
+    features_sampler_class: Union[
+        Type[RandomFeaturesSampler], Type[NystroemFeaturesSampler]
+    ],
     features_sampler_kwargs: np.ndarray,
     n_features: np.ndarray,
     kernel_name: str,
@@ -322,7 +322,8 @@ def plot_kernel_error(
     for n_f in n_features:
         # Create sampler
         features_sampler = features_sampler_class(
-            **features_sampler_kwargs, n_random_features=n_f)
+            **features_sampler_kwargs, n_random_features=n_f
+        )
 
         # Compute approximation
         X_features = features_sampler.fit_transform(X)
@@ -333,10 +334,9 @@ def plot_kernel_error(
         errors = np.append(errors, mean_error)
 
     # Plotting
-    _, ax = plt.subplots(1, 1, figsize=(10,6))
+    _, ax = plt.subplots(1, 1, figsize=(10, 6))
     font = {"fontname": "arial", "fontsize": 18}
-    ax.plot(n_features, errors,
-            color='deepskyblue', label=r"kernel error")
+    ax.plot(n_features, errors, color="deepskyblue", label=r"kernel error")
     ax.set_title("{} kernel error study".format(kernel_name), **font)
 
 
