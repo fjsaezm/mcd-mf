@@ -1,12 +1,18 @@
+"""
+Authors:    alberto.suarez@uam.es
+            joseantonio.alvarezo@estudiante.uam.es
+"""
+
 from __future__ import annotations
 
 import warnings
-from typing import Callable, Optional, Union
+from typing import Callable, Union, Type
 
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn import datasets
 
 
 class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
@@ -106,6 +112,7 @@ class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
             w_cov_matrix,
             self._n_random_samples_w,
         )
+
         return self
 
 
@@ -160,7 +167,8 @@ def random_multivariate_student_t(
     degrees_of_freedom: float,
     n_samples: int,
 ) -> np.ndarray:
-    """Generate samples from a multivariate Student's t.
+    """
+    Generate samples from a multivariate Student's t.
     https://en.wikipedia.org/wiki/Multivariate_t-distribution#Definition
     """
 
@@ -180,14 +188,14 @@ def random_multivariate_student_t(
     return X
 
 
-def random_multivariate_cauchy(n_random_features, gamma, x_0):
+def random_multivariate_cauchy(sample_shape, gamma, x_0):
     """
-        Obtains n_random_features samples following a Cauchy distribution
+        Obtains n_features_sampled samples following a Cauchy distribution
         with parameters gamma and x_0.
         https://en.wikipedia.org/wiki/Cauchy_distribution
 
     Args:
-        n_random_features (int): Number of features to be sampled.
+        n_features_sampled (int): Number of features to be sampled.
         gamma (float): scale
         x_0 (float): center
 
@@ -195,11 +203,11 @@ def random_multivariate_cauchy(n_random_features, gamma, x_0):
         List of random features sampled.
     """
 
-    def cauchy_inverse_cdf(x, gamma):
+    def cauchy_inverse_cdf(x, gamma, x_0):
         return x_0 + gamma * np.tan(np.pi * (x - 0.5))
 
-    U = np.random.rand(n_random_features)  # U ~ U[0, 1]
-    return cauchy_inverse_cdf(U, gamma)
+    U = np.random.rand(*sample_shape)  # U ~ U[0, 1]
+    return cauchy_inverse_cdf(U, gamma, x_0)
 
 
 class RandomFeaturesSamplerExp(RandomFeaturesSampler):
@@ -224,14 +232,13 @@ class RandomFeaturesSamplerExp(RandomFeaturesSampler):
             Q6. Write code to generate random Fourier features
             corresponding to the exponential kernel in D dimensions.
         """
-        n_random_features = np.shape(X)[1]
+        samples_dimension = np.shape(X)[1]
+        sample_shape = (self._n_random_samples_w, samples_dimension)
 
         # The Cauchy's gamma is the inverse of our gamma
         cauchy_scale = 1.0 / self.length_scale_kernel
 
-        self.w = random_multivariate_cauchy(
-            n_random_features, gamma=cauchy_scale, x_0=0
-        )
+        self.w = random_multivariate_cauchy(sample_shape, gamma=cauchy_scale, x_0=0)
 
         return self
 
@@ -325,11 +332,16 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
 def demo_kernel_approximation_features(
     X: np.ndarray,
     kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    features_samplers: List[Union[RandomFeaturesSampler, NystroemFeaturesSampler]],
+    features_sampler_class: Union[
+        Type[RandomFeaturesSampler], Type[NystroemFeaturesSampler]
+    ],
+    features_sampler_kwargs: np.ndarray,
+    n_features: np.array,
+    sampler_name=None,
 ) -> None:
     """Kernel approximation using random sampled features.
     Either RFF or Nyström features."""
-    n_plots = len(features_samplers) + 1
+    n_plots = len(n_features) + 1
     fig, axes = plt.subplots(1, n_plots)
     fig.set_size_inches(15, 4)
     font = {"fontname": "arial", "fontsize": 18}
@@ -340,11 +352,12 @@ def demo_kernel_approximation_features(
     axes[0].set_xticks([])
     axes[0].set_yticks([])
 
-    for features_sampler, ax in zip(features_samplers, axes[1:]):
-        print("# of random features = ", features_sampler.n_features_sampled)
+    for n_f, ax in zip(n_features, axes[1:]):
+        features_sampler = features_sampler_class(
+            n_features_sampled=n_f, **features_sampler_kwargs
+        )
 
         X_features = features_sampler.fit_transform(X)
-
         kernel_matrix_approx = X_features @ X_features.T
 
         ax.imshow(kernel_matrix_approx, cmap=plt.cm.Blues)
@@ -358,12 +371,28 @@ def demo_kernel_approximation_features(
             **font,
         )
 
-        ax.set_title(
-            "{} features".format(features_sampler.n_features_sampled),
-            **font,
-        )
+        ax.set_title("{} features".format(n_f), **font)
 
         ax.set_xticks([])
         ax.set_yticks([])
-        plt.tight_layout()
+
+    if sampler_name is not None:
+        plt.suptitle("{} kernel approximation".format(sampler_name), **font)
+    plt.tight_layout()
     plt.show()
+
+
+def create_S_dataset(n_instances=1000, return_color=False):
+    """Generates a dataset with a S shape"""
+    ## Generate data
+    # 3-D data
+    X, y = datasets.make_s_curve(n_instances, noise=0.1)
+    X = X[np.argsort(y)]
+
+    # Reshape if necessary
+    if X.ndim == 1:
+        X = X[:, np.newaxis]
+
+    if return_color:
+        return X, y
+    return X

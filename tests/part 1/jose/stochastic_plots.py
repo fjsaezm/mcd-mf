@@ -12,6 +12,10 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from matplotlib.colors import Normalize
 
+from typing import Callable, Union, Type
+from kernel_approximation import RandomFeaturesSampler, NystroemFeaturesSampler
+
+
 fig_size = (8, 6)
 
 
@@ -85,3 +89,38 @@ def plot_pdf_3d(X, max_bins=50, lim=3.5, fig_size=fig_size, title=None):
     if title is not None:
         ax.set_title(title)
     plt.show()
+
+
+def plot_kernel_error(
+    X: np.ndarray,
+    kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    features_sampler_class: Union[
+        Type[RandomFeaturesSampler], Type[NystroemFeaturesSampler]
+    ],
+    features_sampler_kwargs: np.ndarray,
+    n_features: np.ndarray,
+    kernel_name: str,
+) -> None:
+    # Initialize variables
+    kernel_matrix = kernel(X, X)
+    errors = np.array([], dtype=float)
+
+    for n_f in n_features:
+        # Create sampler
+        features_sampler = features_sampler_class(
+            **features_sampler_kwargs, n_features_sampled=n_f
+        )
+
+        # Compute approximation
+        X_features = features_sampler.fit_transform(X)
+        kernel_matrix_approx = X_features @ X_features.T
+
+        # Compute error
+        mean_error = np.mean(np.abs(kernel_matrix - kernel_matrix_approx))
+        errors = np.append(errors, mean_error)
+
+    # Plotting
+    _, ax = plt.subplots(1, 1, figsize=(10, 6))
+    font = {"fontname": "arial", "fontsize": 18}
+    ax.plot(n_features, errors, color="deepskyblue", label=r"mean kernel error")
+    ax.set_title("{} kernel error study".format(kernel_name), **font)
