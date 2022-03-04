@@ -1,12 +1,18 @@
+"""
+Authors:    alberto.suarez@uam.es
+            joseantonio.alvarezo@estudiante.uam.es
+"""
+
 from __future__ import annotations
 
 import warnings
-from typing import Callable, Optional, Union
+from typing import Callable, Union, Type
 
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn import datasets
 
 
 class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
@@ -28,12 +34,12 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
         """Initialize w's for the random features.
         This should be implemented for each kernel."""
         self.w = None
-        if self.sampling_method == 'sin+cos':
+        if self.sampling_method == "sin+cos":
             self._n_random_samples_w = self.n_features_sampled // 2
-        elif self.sampling_method == 'cos':
+        elif self.sampling_method == "cos":
             self._n_random_samples_w = self.n_features_sampled
         else:
-            raise ValueError('Please enter a correct sampling method')
+            raise ValueError("Please enter a correct sampling method")
 
         return self
 
@@ -51,23 +57,21 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
         random_features:
             Array of shape (n_instances, n_features_sampled).
         """
-        if (self.w is None):
-            raise ValueError('Use fit_transform to initialize w.')
+        if self.w is None:
+            raise ValueError("Use fit_transform to initialize w.")
 
         n_instances, n_features = np.shape(X)
 
-        if (np.shape(self.w)[1] != n_features):
-            raise ValueError('Different # of features for X and w.')
+        if np.shape(self.w)[1] != n_features:
+            raise ValueError("Different # of features for X and w.")
 
-        if self.sampling_method == 'sin+cos':
-            random_features = np.empty(
-                (n_instances, 2 * self._n_random_samples_w)
-            )
+        if self.sampling_method == "sin+cos":
+            random_features = np.empty((n_instances, 2 * self._n_random_samples_w))
             random_features[:, ::2] = np.cos(X @ self.w.T)
             random_features[:, 1::2] = np.sin(X @ self.w.T)
             normalization_factor = np.sqrt(self._n_random_samples_w)
 
-        elif self.sampling_method == 'cos':
+        elif self.sampling_method == "cos":
 
             """Q7. Implement the sampling method based
             on the second type of random features.
@@ -75,7 +79,7 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
             #  <YOUR CODE HERE>
 
         else:
-            raise ValueError('Please enter a correct sampling method')
+            raise ValueError("Please enter a correct sampling method")
 
         random_features = random_features / normalization_factor
 
@@ -83,13 +87,10 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
 
 
 class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
-    """ Random Fourier Features for the RBF kernel. """
+    """Random Fourier Features for the RBF kernel."""
 
     def __init__(
-        self,
-        n_features_sampled: int,
-        sampling_method: str,
-        sigma_kernel: float
+        self, n_features_sampled: int, sampling_method: str, sigma_kernel: float
     ) -> None:
         super().__init__(n_features_sampled, sampling_method)
         self.sigma_kernel = sigma_kernel
@@ -111,6 +112,7 @@ class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
             w_cov_matrix,
             self._n_random_samples_w,
         )
+
         return self
 
 
@@ -132,7 +134,7 @@ class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
         n_features_sampled: int,
         sampling_method: str,
         length_scale_kernel: float,
-        nu_matern_kernel: float
+        nu_matern_kernel: float,
     ) -> None:
         super().__init__(n_features_sampled, sampling_method)
         self.nu_matern_kernel = nu_matern_kernel
@@ -165,7 +167,8 @@ def random_multivariate_student_t(
     degrees_of_freedom: float,
     n_samples: int,
 ) -> np.ndarray:
-    """Generate samples from a multivariate Student's t.
+    """
+    Generate samples from a multivariate Student's t.
     https://en.wikipedia.org/wiki/Multivariate_t-distribution#Definition
     """
 
@@ -185,17 +188,36 @@ def random_multivariate_student_t(
     return X
 
 
+def random_multivariate_cauchy(sample_shape, gamma, x_0):
+    """
+        Obtains n_features_sampled samples following a Cauchy distribution
+        with parameters gamma and x_0.
+        https://en.wikipedia.org/wiki/Cauchy_distribution
+
+    Args:
+        n_features_sampled (int): Number of features to be sampled.
+        gamma (float): scale
+        x_0 (float): center
+
+    Return:
+        List of random features sampled.
+    """
+
+    def cauchy_inverse_cdf(x, gamma, x_0):
+        return x_0 + gamma * np.tan(np.pi * (x - 0.5))
+
+    U = np.random.rand(*sample_shape)  # U ~ U[0, 1]
+    return cauchy_inverse_cdf(U, gamma, x_0)
+
 
 class RandomFeaturesSamplerExp(RandomFeaturesSampler):
-    """ Random Fourier Features for the exponential kernel. """
+    """Random Fourier Features for the exponential kernel."""
 
     def __init__(
-        self,
-        n_features_sampled: int,
-        sampling_method: str,
-        length_scale_kernel: float
+        self, n_features_sampled: int, sampling_method: str, length_scale_kernel: float
     ) -> None:
         super().__init__(n_features_sampled, sampling_method)
+        # gamma
         self.length_scale_kernel = length_scale_kernel
 
     def fit(
@@ -206,23 +228,30 @@ class RandomFeaturesSamplerExp(RandomFeaturesSampler):
         """Initialize the w's for the random features."""
         super().fit(X)
 
-        """Q6. Write code to generate random Fourier Features
-        corresponding to the exponential kernel in D dimensions.
         """
-        #  <YOUR CODE HERE>
+            Q6. Write code to generate random Fourier features
+            corresponding to the exponential kernel in D dimensions.
+        """
+        samples_dimension = np.shape(X)[1]
+        sample_shape = (self._n_random_samples_w, samples_dimension)
+
+        # The Cauchy's gamma is the inverse of our gamma
+        cauchy_scale = 1.0 / self.length_scale_kernel
+
+        self.w = random_multivariate_cauchy(sample_shape, gamma=cauchy_scale, x_0=0)
 
         return self
 
+
 class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
-    """Sample Nystroem features. """
+    """Sample Nystroem features."""
 
     def __init__(
         self,
         n_features_sampled: int,
-        kernel: Callable[[np.ndarray, np.ndarray], np.ndarray]
-
+        kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
     ) -> None:
-        self.n_features_sampled=n_features_sampled
+        self.n_features_sampled = n_features_sampled
         self._kernel = kernel
 
     def fit(
@@ -243,10 +272,7 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
         self._X_reduced = X[self.component_indices_, :]
 
         # Compute reduced kernel matrix.
-        self._reduced_kernel_matrix = self._kernel(
-            self._X_reduced,
-            self._X_reduced
-        )
+        self._reduced_kernel_matrix = self._kernel(self._X_reduced, self._X_reduced)
 
         self._reduced_kernel_matrix = (
             self._reduced_kernel_matrix + self._reduced_kernel_matrix.T
@@ -254,11 +280,7 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
 
         # Compute auxiliary quantities.
         self._sqrtm_pinv_reduced_kernel_matrix = sp.linalg.sqrtm(
-            np.linalg.pinv(
-                self._reduced_kernel_matrix,
-                rcond=1.0e-6,
-                hermitian=True
-            )
+            np.linalg.pinv(self._reduced_kernel_matrix, rcond=1.0e-6, hermitian=True)
         )
 
         # Check that complex part is negligible and eliminate it
@@ -268,9 +290,7 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
                 np.abs(np.imag(self._sqrtm_pinv_reduced_kernel_matrix))
             )
             if max_imaginary_part > threshold_imaginary_part:
-                warnings.warn(
-                    'Maximum imaginary part is {}'.format(max_imaginary_part)
-                )
+                warnings.warn("Maximum imaginary part is {}".format(max_imaginary_part))
 
             self._sqrtm_pinv_reduced_kernel_matrix = np.real(
                 self._sqrtm_pinv_reduced_kernel_matrix
@@ -279,9 +299,7 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
         return self
 
     def approximate_kernel_matrix(
-        self,
-        X: np.ndarray,
-        n_features_sampled: int
+        self, X: np.ndarray, n_features_sampled: int
     ) -> np.ndarray:
         """Approximate the kernel matrix using Nystroem features."""
         X_nystroem = self.fit_transform(n_features_sampled, X)
@@ -305,8 +323,7 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
         reduced_kernel_matrix_columns = self._kernel(X_prime, self._X_reduced)
 
         X_prime_nystroem = (
-            reduced_kernel_matrix_columns
-            @ self._sqrtm_pinv_reduced_kernel_matrix
+            reduced_kernel_matrix_columns @ self._sqrtm_pinv_reduced_kernel_matrix
         )
 
         return X_prime_nystroem
@@ -315,26 +332,32 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
 def demo_kernel_approximation_features(
     X: np.ndarray,
     kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    features_samplers: List[Union[RandomFeaturesSampler, NystroemFeaturesSampler]],
+    features_sampler_class: Union[
+        Type[RandomFeaturesSampler], Type[NystroemFeaturesSampler]
+    ],
+    features_sampler_kwargs: np.ndarray,
+    n_features: np.array,
+    sampler_name=None,
 ) -> None:
     """Kernel approximation using random sampled features.
     Either RFF or Nyström features."""
-    n_plots = len(features_samplers) + 1
+    n_plots = len(n_features) + 1
     fig, axes = plt.subplots(1, n_plots)
     fig.set_size_inches(15, 4)
-    font = {'fontname': 'arial', 'fontsize': 18}
+    font = {"fontname": "arial", "fontsize": 18}
 
     kernel_matrix = kernel(X, X)
     axes[0].imshow(kernel_matrix, cmap=plt.cm.Blues)
-    axes[0].set_title('Exact kernel', **font)
+    axes[0].set_title("Exact kernel", **font)
     axes[0].set_xticks([])
     axes[0].set_yticks([])
 
-    for features_sampler, ax in zip(features_samplers, axes[1:]):
-        print('# of random features = ', features_sampler.n_features_sampled)
+    for n_f, ax in zip(n_features, axes[1:]):
+        features_sampler = features_sampler_class(
+            n_features_sampled=n_f, **features_sampler_kwargs
+        )
 
         X_features = features_sampler.fit_transform(X)
-
         kernel_matrix_approx = X_features @ X_features.T
 
         ax.imshow(kernel_matrix_approx, cmap=plt.cm.Blues)
@@ -343,17 +366,33 @@ def demo_kernel_approximation_features(
         err_mean = np.mean(np.abs(err_approx))
         err_max = np.max(np.abs(err_approx))
 
-        ax.set_xlabel('err (mean) = {:.4f} \n err (max) = {:.4f}'.format(
-            err_mean,
-            err_max
-        ), **font)
-
-        ax.set_title(
-            '{} features'.format(features_sampler.n_features_sampled),
+        ax.set_xlabel(
+            "err (mean) = {:.4f} \n err (max) = {:.4f}".format(err_mean, err_max),
             **font,
         )
 
+        ax.set_title("{} features".format(n_f), **font)
+
         ax.set_xticks([])
         ax.set_yticks([])
-        plt.tight_layout()
+
+    if sampler_name is not None:
+        plt.suptitle("{} kernel approximation".format(sampler_name), **font)
+    plt.tight_layout()
     plt.show()
+
+
+def create_S_dataset(n_instances=1000, return_color=False):
+    """Generates a dataset with a S shape"""
+    ## Generate data
+    # 3-D data
+    X, y = datasets.make_s_curve(n_instances, noise=0.1)
+    X = X[np.argsort(y)]
+
+    # Reshape if necessary
+    if X.ndim == 1:
+        X = X[:, np.newaxis]
+
+    if return_color:
+        return X, y
+    return X
