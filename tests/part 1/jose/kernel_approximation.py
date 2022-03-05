@@ -12,7 +12,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn import datasets
 
 from sklearn.gaussian_process.kernels import RBF as RBF_sklearn
 
@@ -433,31 +432,3 @@ def demo_kernel_approximation_features(
         plt.suptitle("{} kernel approximation".format(sampler_name), **font)
     plt.tight_layout()
     plt.show()
-
-
-def create_S_dataset(n_instances=1000, shuffle=True):
-    """Generates a dataset with a S shape"""
-    ## Generate data
-    # 3-D data
-    X, y = datasets.make_s_curve(n_instances, noise=0.1)
-
-    # This only shuffles the X values respect to the labels (y).
-    # Since the labels are not used, this sorting
-    if shuffle:
-        X = X[np.argsort(y)]
-
-    # Reshape if necessary
-    if X.ndim == 1:
-        X = X[:, np.newaxis]
-
-    return X, y
-
-
-"""
-1. Non-linear SVM + RBF kernel [C, gamma]
-2. Linear SVM + RBF random features [C, gamma, n_features]
-3. Linear SVM + RBF Nyström features [C, gamma, n_features]
-4. Non-linear SVM + exponential kernel [C, length_scale]
-5. Linear SVM + exponential random features [C, length_scale, n_features]
-6. Linear SVM + exponential Nyström features [C, length_scale, n_features]
-"""
