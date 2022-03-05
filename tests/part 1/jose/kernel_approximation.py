@@ -72,11 +72,15 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
             normalization_factor = np.sqrt(self._n_random_samples_w)
 
         elif self.sampling_method == "cos":
+            """Q8. Implement the sampling method based
+            on the second type of random features."""
 
-            """Q7. Implement the sampling method based
-            on the second type of random features.
-            """
-            #  <YOUR CODE HERE>
+            # Sample b from U[0, 2pi]
+            b = 2 * np.pi * np.random.rand(self._n_random_samples_w)
+            random_features = np.cos(X @ self.w.T + b)
+
+            # Normalization factor obtained as explained in the notebook
+            normalization_factor = np.sqrt(self._n_random_samples_w / 2)
 
         else:
             raise ValueError("Please enter a correct sampling method")
@@ -206,7 +210,8 @@ def random_multivariate_cauchy(sample_shape, gamma, x_0):
     def cauchy_inverse_cdf(x, gamma, x_0):
         return x_0 + gamma * np.tan(np.pi * (x - 0.5))
 
-    U = np.random.rand(*sample_shape)  # U ~ U[0, 1]
+    # U ~ U[0, 1]
+    U = np.random.rand(*sample_shape)
     return cauchy_inverse_cdf(U, gamma, x_0)
 
 
