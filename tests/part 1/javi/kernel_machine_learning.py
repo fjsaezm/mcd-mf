@@ -14,8 +14,8 @@ def linear_kernel(
 def exponential_kernel(
     X: np.ndarray,
     X_prime: np.ndarray,
-    A: float,
-    l: float
+    A: float = 1.0,
+    l: float = 2.0
 ) -> np.ndarray:
     d = distance.cdist(X, X_prime, metric='minkowski', p=1)
     return A * np.exp(- d / l)

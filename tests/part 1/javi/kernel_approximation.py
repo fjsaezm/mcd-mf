@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 from sklearn.base import BaseEstimator, TransformerMixin
+from sklearn import datasets
 
 
 class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
@@ -56,6 +57,8 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
 
         n_instances, n_features = np.shape(X)
 
+        print(self.w.shape)
+        print(X.shape)
         if (np.shape(self.w)[1] != n_features):
             raise ValueError('Different # of features for X and w.')
 
@@ -117,15 +120,15 @@ class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
 class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
     """Random Fourier Features for the Matern kernel."""
 
-    def __init__(self, length_scale: float, nu: float) -> None:
-        """The Fourier transform of the Matérn kernel is a
-        Student's t distribution with twice the degrees of freedom.
-        Ref. Chapter 4 of
-        Carl Edward Rasmussen and Christopher K. I. Williams. 2005.
-        Gaussian Processes for Machine Learning
-        (Adaptive Computation and Machine Learning). The MIT Press.
-        There is probably a mistake with the scale factor.
-        """
+    """
+    The Fourier transform of the Matérn kernel is a
+    Student's t distribution with twice the degrees of freedom.
+    Ref. Chapter 4 of
+    Carl Edward Rasmussen and Christopher K. I. Williams. 2005.
+    Gaussian Processes for Machine Learning
+    (Adaptive Computation and Machine Learning). The MIT Press.
+    There is probably a mistake with the scale factor.
+    """
 
     def __init__(
         self,
@@ -191,9 +194,9 @@ class RandomFeaturesSamplerExp(RandomFeaturesSampler):
 
     def __init__(
         self,
-        n_features_sampled: int,
-        sampling_method: str,
-        length_scale_kernel: float
+        n_features_sampled: int = 100,
+        sampling_method: str = 'sin+cos',
+        length_scale_kernel: float = 2.0
     ) -> None:
         super().__init__(n_features_sampled, sampling_method)
         self.length_scale_kernel = length_scale_kernel
@@ -206,10 +209,18 @@ class RandomFeaturesSamplerExp(RandomFeaturesSampler):
         """Initialize the w's for the random features."""
         super().fit(X)
 
-        """Q6. Write code to generate random Fourier Features
-        corresponding to the exponential kernel in D dimensions.
-        """
-        #  <YOUR CODE HERE>
+        # Declare the inverse cdf needed for inverse sampling method
+        cauchy_inverse_cdf = lambda p,gamma : (1/gamma)* np.tan(np.pi*(p-0.5))
+
+
+        rng = np.random.default_rng()
+        U = rng.random((X.shape[0],self._n_random_samples_w))
+        print(X.shape)
+        print(U.shape)
+
+        self.w = cauchy_inverse_cdf(U,self.length_scale_kernel)
+        print(self.w.shape)
+        print("---")
 
         return self
 
@@ -315,7 +326,7 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
 def demo_kernel_approximation_features(
     X: np.ndarray,
     kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
-    features_samplers: List[Union[RandomFeaturesSampler, NystroemFeaturesSampler]],
+    features_samplers: List[Union[Rlength_scale_kernelandomFeaturesSampler, NystroemFeaturesSampler]],
 ) -> None:
     """Kernel approximation using random sampled features.
     Either RFF or Nyström features."""
@@ -334,6 +345,7 @@ def demo_kernel_approximation_features(
         print('# of random features = ', features_sampler.n_features_sampled)
 
         X_features = features_sampler.fit_transform(X)
+        print("omega")
 
         kernel_matrix_approx = X_features @ X_features.T
 
@@ -356,4 +368,20 @@ def demo_kernel_approximation_features(
         ax.set_xticks([])
         ax.set_yticks([])
         plt.tight_layout()
+    plt.show()
+
+
+def generate_curve_dataset(n_instances = 1000):
+    """
+    Generates an 3-dimensional S given a number of instances
+    """
+    X,t = datasets.make_s_curve(n_instances, noise = 0.1)
+    return X,t
+
+
+def plot_curve_dataset(data,t):
+
+    fig = plt.figure(figsize=(15,5))
+    ax = fig.add_subplot(projection='3d')
+    ax.scatter(data[:,0], data[:,1],data[:,2], c = t, cmap = plt.cm.Spectral)
     plt.show()
