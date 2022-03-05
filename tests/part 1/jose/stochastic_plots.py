@@ -67,24 +67,21 @@ def plot_pdf(X, pdf, max_bins=50, ax=None, fig_size=fig_size, fontsize=14):
     ax.legend()
 
 
-def plot_pdf_3d(X, max_bins=50, lim=3.5, fig_size=fig_size, title=None):
+def plot_pdf_3d(X, n_bins=50, lim=3.5, fig_size=fig_size, title=None):
     fig = plt.figure(figsize=fig_size)
     ax = fig.add_subplot(projection="3d")
+
+    # Compute histogram
     hist, xedges, yedges = np.histogram2d(
-        X[:, 0], X[:, 1], bins=max_bins, range=[[-lim, lim], [-lim, lim]]
+        X[:, 0], X[:, 1], bins=n_bins, range=[[-lim, lim], [-lim, lim]]
     )
 
-    # Construct arrays for the anchor positions of the 16 bars.
-    xpos, ypos = np.meshgrid(xedges[:-1] + 0.25, yedges[:-1] + 0.25, indexing="ij")
-    xpos = xpos.ravel()
-    ypos = ypos.ravel()
-    zpos = 0
+    hist = 1.0 * hist / np.sum(hist)
+    x, y = np.meshgrid(xedges[:-1], yedges[:-1])
 
-    # Construct arrays with the dimensions for the 16 bars.
-    dx = dy = 0.5 * np.ones_like(zpos)
-    dz = hist.ravel() / len(X)
-
-    ax.bar3d(xpos, ypos, zpos, dx, dy, dz, color="deepskyblue")
+    # Plot the surface.
+    surf = ax.plot_surface(x, y, hist, cmap=cm.plasma, linewidth=0, antialiased=True)
+    fig.colorbar(surf, shrink=0.5, aspect=5)
 
     if title is not None:
         ax.set_title(title)
@@ -99,11 +96,15 @@ def plot_kernel_error(
     ],
     features_sampler_kwargs: np.ndarray,
     n_features: np.ndarray,
-    kernel_name: str,
+    ax=None,
+    color="deepskyblue",
+    label=r"mean kernel error",
+    title: str = "",
+    kernel_name: str = "",
 ) -> None:
     # Initialize variables
     kernel_matrix = kernel(X, X)
-    errors = np.array([], dtype=float)
+    errors = []
 
     for n_f in n_features:
         # Create sampler
@@ -117,10 +118,16 @@ def plot_kernel_error(
 
         # Compute error
         mean_error = np.mean(np.abs(kernel_matrix - kernel_matrix_approx))
-        errors = np.append(errors, mean_error)
+        errors.append(mean_error)
 
     # Plotting
-    _, ax = plt.subplots(1, 1, figsize=(10, 6))
+    if ax is None:
+        _, ax = plt.subplots(1, 1, figsize=(10, 6))
     font = {"fontname": "arial", "fontsize": 18}
-    ax.plot(n_features, errors, color="deepskyblue", label=r"mean kernel error")
-    ax.set_title("{} kernel error study".format(kernel_name), **font)
+    ax.plot(n_features, errors, color=color, label=label)
+
+    # Setting the title
+    if title != "":
+        ax.set_title(title)
+    elif kernel_name != "":
+        ax.set_title("{} kernel error study".format(kernel_name), **font)

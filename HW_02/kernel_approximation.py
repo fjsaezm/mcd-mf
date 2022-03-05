@@ -170,7 +170,6 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
         kernel: Callable[[np.ndarray, np.ndarray], np.ndarray] = RBF(),
         n_random_features: int = 100,
     ) -> None:
-
         # _kernel -> kernel due to SKlearn compatibility
         self.kernel = kernel
         self.component_indices_ = None

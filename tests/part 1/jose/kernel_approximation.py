@@ -6,13 +6,14 @@ Authors:    alberto.suarez@uam.es
 from __future__ import annotations
 
 import warnings
-from typing import Callable, Union, Type
+from typing import Callable, Union, Type, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy as sp
 from sklearn.base import BaseEstimator, TransformerMixin
-from sklearn import datasets
+
+from sklearn.gaussian_process.kernels import RBF as RBF_sklearn
 
 
 class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
@@ -25,14 +26,21 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
     ) -> None:
         self.n_features_sampled = n_features_sampled
         self.sampling_method = sampling_method
+        self.w = None
 
     def fit(
         self,
         X: np.ndarray,
         y: None = None,
     ) -> RandomFeaturesSampler:
-        """Initialize w's for the random features.
-        This should be implemented for each kernel."""
+        """
+        Initialize w's for the random features.
+        This should be implemented for each kernel.
+
+        Each subclass should on their fir method should:
+        1. Call this fir method.
+        2. Fill the weights values self.w
+        """
         self.w = None
         if self.sampling_method == "sin+cos":
             self._n_random_samples_w = self.n_features_sampled // 2
@@ -72,11 +80,15 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
             normalization_factor = np.sqrt(self._n_random_samples_w)
 
         elif self.sampling_method == "cos":
+            """Q8. Implement the sampling method based
+            on the second type of random features."""
 
-            """Q7. Implement the sampling method based
-            on the second type of random features.
-            """
-            #  <YOUR CODE HERE>
+            # Sample b from U[0, 2pi]
+            b = 2 * np.pi * np.random.rand(self._n_random_samples_w)
+            random_features = np.cos(X @ self.w.T + b)
+
+            # Normalization factor obtained as explained in the notebook
+            normalization_factor = np.sqrt(self._n_random_samples_w / 2)
 
         else:
             raise ValueError("Please enter a correct sampling method")
@@ -85,15 +97,25 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
 
         return random_features
 
+    def fit_transform(
+        self, X: np.ndarray, X_prime: Optional[np.ndarray] = None
+    ) -> np.ndarray:
+        """Initialize  w's (fit) & compute random features (transform)."""
+        self.fit(X)
+        return self.transform(X)
+
 
 class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
     """Random Fourier Features for the RBF kernel."""
 
     def __init__(
-        self, n_features_sampled: int, sampling_method: str, sigma_kernel: float
+        self,
+        n_features_sampled: int = 100,
+        sampling_method: str = "sin+cos",
+        sigma: float = 1.0,
     ) -> None:
         super().__init__(n_features_sampled, sampling_method)
-        self.sigma_kernel = sigma_kernel
+        self.sigma = sigma
 
     def fit(
         self,
@@ -105,7 +127,12 @@ class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
 
         n_features = np.shape(X)[1]
         w_mean = np.zeros(n_features)
-        w_cov_matrix = np.identity(n_features) / self.sigma_kernel**2
+
+        # This implementation is NOT CONSISTENT witht the one in our
+        # homework assigment, where we multiplied by sigma**2 instead
+        # of dividing by it. This means the best sigmas will not be
+        # the same after performing grid
+        w_cov_matrix = np.identity(n_features) / self.sigma**2
 
         self.w = np.random.default_rng().multivariate_normal(
             w_mean,
@@ -117,28 +144,34 @@ class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
 
 
 class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
-    """Random Fourier Features for the Matern kernel."""
+    """
+    Random Fourier Features for the Matern kernel.
 
+    The Fourier transform of the Matérn kernel is a
+    Student's t distribution with twice the degrees of freedom.
+    Ref. Chapter 4 of
+    Carl Edward Rasmussen and Christopher K. I. Williams. 2005.
+    Gaussian Processes for Machine Learning
+    (Adaptive Computation and Machine Learning). The MIT Press.
+    There is probably a mistake with the scale factor.
+    """
+
+    """
+    Old constructor, commented instead of deleted in case is needed later
     def __init__(self, length_scale: float, nu: float) -> None:
-        """The Fourier transform of the Matérn kernel is a
-        Student's t distribution with twice the degrees of freedom.
-        Ref. Chapter 4 of
-        Carl Edward Rasmussen and Christopher K. I. Williams. 2005.
-        Gaussian Processes for Machine Learning
-        (Adaptive Computation and Machine Learning). The MIT Press.
-        There is probably a mistake with the scale factor.
-        """
+    """
 
     def __init__(
         self,
-        n_features_sampled: int,
-        sampling_method: str,
-        length_scale_kernel: float,
-        nu_matern_kernel: float,
+        scale: float = 1.0,
+        nu: float = 1.0,
+        n_features_sampled: int = 100,
+        sampling_method: str = "sin+cos",
     ) -> None:
         super().__init__(n_features_sampled, sampling_method)
-        self.nu_matern_kernel = nu_matern_kernel
-        self.length_scale_kernel = length_scale_kernel
+        self.nu = nu
+        self.scale = scale
+        self.w = None
 
     def fit(
         self,
@@ -150,12 +183,12 @@ class RandomFeaturesSamplerMatern(RandomFeaturesSampler):
         super().fit(X)
         n_features = np.shape(X)[1]
         w_mean = np.zeros(n_features)
-        w_cov_matrix = np.identity(n_features) / self.length_scale_kernel**2
+        w_cov_matrix = np.identity(n_features) / self.scale**2
 
         self.w = random_multivariate_student_t(
             w_mean,
             w_cov_matrix,
-            2.0 * self.nu_matern_kernel,
+            2.0 * self.nu,
             self._n_random_samples_w,
         )
         return self
@@ -206,7 +239,8 @@ def random_multivariate_cauchy(sample_shape, gamma, x_0):
     def cauchy_inverse_cdf(x, gamma, x_0):
         return x_0 + gamma * np.tan(np.pi * (x - 0.5))
 
-    U = np.random.rand(*sample_shape)  # U ~ U[0, 1]
+    # U ~ U[0, 1]
+    U = np.random.rand(*sample_shape)
     return cauchy_inverse_cdf(U, gamma, x_0)
 
 
@@ -214,7 +248,10 @@ class RandomFeaturesSamplerExp(RandomFeaturesSampler):
     """Random Fourier Features for the exponential kernel."""
 
     def __init__(
-        self, n_features_sampled: int, sampling_method: str, length_scale_kernel: float
+        self,
+        n_features_sampled: int = 100,
+        sampling_method: str = "sin+cos",
+        length_scale_kernel: float = 1,
     ) -> None:
         super().__init__(n_features_sampled, sampling_method)
         # gamma
@@ -248,11 +285,24 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
 
     def __init__(
         self,
-        n_features_sampled: int,
-        kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
+        n_features_sampled: int = 100,
+        kernel: Callable[[np.ndarray, np.ndarray], np.ndarray] = RBF_sklearn(),
     ) -> None:
+        # _kernel -> kernel due to SKlearn compatibility
+        self.kernel = kernel
+        self.component_indices_ = None
+
+        # J
+        self._X_reduced = None
+
+        # W
+        self._reduced_kernel_matrix = None
+
+        # (W+)^1/2
+        self._sqrtm_pinv_reduced_kernel_matrix = None
+
+        # Needed for compatibility
         self.n_features_sampled = n_features_sampled
-        self._kernel = kernel
 
     def fit(
         self,
@@ -261,19 +311,23 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
     ) -> NystroemFeaturesSampler:
         """Precompute auxiliary quantities for Nystroem features."""
         n_instances = len(X)
+
         # Sample subset of training instances.
         rng = np.random.default_rng()
+
+        # Check dimensions to avoid selecting more features than available
+        n_features_to_sample = min(self.n_features_sampled, n_instances)
+
         self.component_indices_ = rng.choice(
             range(n_instances),
-            size=self.n_features_sampled,
+            size=n_features_to_sample,
             replace=False,
         )
 
         self._X_reduced = X[self.component_indices_, :]
 
         # Compute reduced kernel matrix.
-        self._reduced_kernel_matrix = self._kernel(self._X_reduced, self._X_reduced)
-
+        self._reduced_kernel_matrix = self.kernel(self._X_reduced, self._X_reduced)
         self._reduced_kernel_matrix = (
             self._reduced_kernel_matrix + self._reduced_kernel_matrix.T
         ) / 2.0  # enforce symmetry of kernel matrix
@@ -299,34 +353,32 @@ class NystroemFeaturesSampler(BaseEstimator, TransformerMixin):
         return self
 
     def approximate_kernel_matrix(
-        self, X: np.ndarray, n_features_sampled: int
-    ) -> np.ndarray:
-        """Approximate the kernel matrix using Nystroem features."""
-        X_nystroem = self.fit_transform(n_features_sampled, X)
-        kernel_matrix_approx = X_nystroem @ X_nystroem.T
-        return kernel_matrix_approx
-
-    """ def fit_transform(
         self,
         X: np.ndarray,
+        n_features_sampled: int,
+        X_prime: Optional[np.ndarray] = None,  # Needed for sklearn compatibility
     ) -> np.ndarray:
-        # Compute Nystrom features.
-        self.fit(X)
-        if X_prime is None:
-            X_prime = X
-        X_prime_nystroem = self.transform(X_prime)
-        return X_prime_nystroem
-    """
+        """Approximate the kernel matrix using Nystroem features."""
+        X_features = self.fit_transform(X)
+        return X_features @ X_features.T
 
     def transform(self, X_prime: np.ndarray) -> np.ndarray:
         """Compute Nystroem features with precomputed quantities."""
-        reduced_kernel_matrix_columns = self._kernel(X_prime, self._X_reduced)
+        J = self.kernel(X_prime, self._X_reduced)
+        return J @ self._sqrtm_pinv_reduced_kernel_matrix
 
-        X_prime_nystroem = (
-            reduced_kernel_matrix_columns @ self._sqrtm_pinv_reduced_kernel_matrix
-        )
+    def fit_transform(
+        self,
+        X: np.ndarray,
+        X_prime: Optional[np.ndarray] = None,
+    ) -> np.ndarray:
+        # Compute Nystrom features.
+        self.fit(X)
 
-        return X_prime_nystroem
+        # if X_prime is None:
+        #    X_prime = X
+
+        return self.transform(X)
 
 
 def demo_kernel_approximation_features(
@@ -380,19 +432,3 @@ def demo_kernel_approximation_features(
         plt.suptitle("{} kernel approximation".format(sampler_name), **font)
     plt.tight_layout()
     plt.show()
-
-
-def create_S_dataset(n_instances=1000, return_color=False):
-    """Generates a dataset with a S shape"""
-    ## Generate data
-    # 3-D data
-    X, y = datasets.make_s_curve(n_instances, noise=0.1)
-    X = X[np.argsort(y)]
-
-    # Reshape if necessary
-    if X.ndim == 1:
-        X = X[:, np.newaxis]
-
-    if return_color:
-        return X, y
-    return X
