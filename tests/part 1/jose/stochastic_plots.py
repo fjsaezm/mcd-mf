@@ -131,3 +131,42 @@ def plot_kernel_error(
         ax.set_title(title)
     elif kernel_name != "":
         ax.set_title("{} kernel error study".format(kernel_name), **font)
+
+
+def plot_train_and_test_error(
+    X_train: np.ndarray,
+    X_test: np.ndarray,
+    y_train: np.ndarray,
+    y_test: np.ndarray,
+    model,
+    n_features: np.ndarray,
+    ax=None,
+    color="deepskyblue",
+    color_test="lime",
+    title: str = "",
+) -> None:
+    # Initialize variables
+    train_errors = []
+    test_errors = []
+
+    for n_f in n_features:
+        # Set number of features to use
+        model.n_features_sampled = n_f
+
+        # Fit the model
+        model = model.fit(X_train, y_train)
+
+        # Compute error in predictions
+        train_errors.append(1.0 - model.score(X_train, y_train))
+        test_errors.append(1.0 - model.score(X_test, y_test))
+
+    # Plotting
+    if ax is None:
+        _, ax = plt.subplots(1, 1, figsize=(10, 6))
+    ax.plot(n_features, train_errors, color=color, label="Train error")
+    ax.plot(n_features, test_errors, color=color_test, label="Test error")
+    ax.set_xlabel("n features")
+
+    # Setting the title
+    if title != "":
+        ax.set_title(title)
