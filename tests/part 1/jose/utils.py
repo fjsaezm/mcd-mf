@@ -72,27 +72,41 @@ def pickle_load(n_class, pickles_path="./pickles"):
 
 # ------------------- TABLE COMPUTATION -------------------
 
+""" Computes single table """
+
+
+def _create_single_table(agglomerated_results_array, field, index_names, model_names):
+    field_values = np.array(
+        [[model[field] for model in models] for models in agglomerated_results_array]
+    )
+    return pd.DataFrame(
+        [np.mean(field_values, axis=0), np.std(field_values, axis=0)],
+        columns=model_names,
+        index=index_names,
+    )
+
 
 def compute_error_tables(agglomerated_results_array, model_names):
-    train_errors = np.array(
-        [
-            [1.0 - model["train_score"] for model in models]
-            for models in agglomerated_results_array
-        ]
+    train_error_table = _create_single_table(
+        agglomerated_results_array,
+        "train_score",
+        index_names=["Mean train error", "Std train error"],
+        model_names=model_names,
     )
-    train_error_table = pd.DataFrame(columns=model_names)
-    train_error_table["Mean search time (per CV fold)"] = np.sum(train_errors, axis=0)
-    train_error_table["Std search time (per CV fold)"] = np.std(train_errors, axis=0)
 
-    test_errors = np.array(
-        [
-            [1.0 - model["test_score"] for model in models]
-            for models in agglomerated_results_array
-        ]
+    test_error_table = _create_single_table(
+        agglomerated_results_array,
+        "test_score",
+        index_names=["Mean test error", "Std test error"],
+        model_names=model_names,
     )
-    test_error_table = pd.DataFrame(columns=model_names)
-    test_error_table["Mean search time (per CV fold)"] = np.sum(test_errors, axis=0)
-    test_error_table["Std search time (per CV fold)"] = np.std(test_errors, axis=0)
+
+    train_error_table.loc["Mean train error"] = (
+        1.0 - train_error_table.loc["Mean train error"]
+    )
+    test_error_table.loc["Mean test error"] = (
+        1.0 - test_error_table.loc["Mean test error"]
+    )
 
     return (
         train_error_table,
@@ -100,50 +114,45 @@ def compute_error_tables(agglomerated_results_array, model_names):
     )
 
 
-def compute_cv_error(clf_results_array, model_n, split=0):
-    colum_names = ["params set {}".format(i) for i in len(clf_results_array[0])]
-    results = clf_results_array[split][model_n].cv_results_
+def compute_cv_error(clf_results_array, model_names):
+    mean_scores = np.array(
+        [
+            [np.mean(1.0 - clf.cv_results_["mean_test_score"]) for clf in clfs]
+            for clfs in clf_results_array
+        ]
+    )
+    std_of_means_scores = np.array(
+        [
+            [np.std(1.0 - clf.cv_results_["mean_test_score"]) for clf in clfs]
+            for clfs in clf_results_array
+        ]
+    )
 
-    cv_error_table = pd.DataFrame(columns=colum_names)
-    cv_error_table["CV mean train error"] = 1.0 - results["mean_train_score"]
-    cv_error_table["CV std train error"] = results["std_train_score"]
-    cv_error_table["CV mean test error"] = 1.0 - results["mean_test_score"]
-    cv_error_table["CV std test error"] = results["std_test_score"]
-    return cv_error_table
+    mean_cv_scores_table = pd.DataFrame(mean_scores, columns=model_names)
+    std_cv_scores_table = pd.DataFrame(std_of_means_scores, columns=model_names)
+    return mean_cv_scores_table, std_cv_scores_table
 
 
 def compute_time_tables(agglomerated_results_array, model_names):
-    search_times = (
-        np.array(
-            [
-                [model["search"] for model in models]
-                for models in agglomerated_results_array
-            ]
-        )
-        / 5.0
-    )
-    search_table = pd.DataFrame(columns=model_names)
-    search_table["Mean search time (per CV fold)"] = np.sum(search_times, axis=0)
-    search_table["Std search time (per CV fold)"] = np.std(search_times, axis=0)
 
-    train_times = np.array(
-        [
-            [model["training"] for model in models]
-            for models in agglomerated_results_array
-        ]
+    # Divide search table by 5 to compute per each of the 5-folds
+    search_table = _create_single_table(
+        agglomerated_results_array,
+        "search",
+        index_names=["Mean search time (per CV fold)", "Std search time (per CV fold)"],
+        model_names=model_names,
+    ).div(5.0)
+    training_table = _create_single_table(
+        agglomerated_results_array,
+        "training",
+        index_names=["Mean training time", "Std training time"],
+        model_names=model_names,
     )
-    training_table = pd.DataFrame(columns=model_names)
-    training_table["Mean training time"] = np.sum(train_times, axis=0)
-    training_table["Std training time"] = np.std(train_times, axis=0)
-
-    prediction_times = np.array(
-        [
-            [model["prediction"] for model in models]
-            for models in agglomerated_results_array
-        ]
+    prediction_table = _create_single_table(
+        agglomerated_results_array,
+        "prediction",
+        index_names=["Mean prediction time", "Std prediction time"],
+        model_names=model_names,
     )
-    prediction_table = pd.DataFrame(columns=model_names)
-    prediction_table["Mean training time"] = np.sum(prediction_times, axis=0)
-    prediction_table["Std training time"] = np.std(prediction_times, axis=0)
 
-    search_table, training_table, prediction_table
+    return search_table, training_table, prediction_table
