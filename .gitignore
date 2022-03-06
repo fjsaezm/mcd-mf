@@ -129,3 +129,4 @@ dmypy.json
 .pyre/
 HW_02/inputs/mnist_train.csv
 tests/part 1/jose/pickles/clfs_10_classes.p
+tests/part 1/jose/pickles/clfs_10_classes - final.p

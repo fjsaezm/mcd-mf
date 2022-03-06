@@ -150,6 +150,8 @@ def plot_train_and_test_error(
     test_errors = []
 
     for n_f in n_features:
+        # print("\t n_features: {}".format(n_f))
+
         # Set number of features to use
         model.n_features_sampled = n_f
 
