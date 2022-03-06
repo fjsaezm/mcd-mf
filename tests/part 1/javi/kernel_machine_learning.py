@@ -24,8 +24,8 @@ def exponential_kernel(
 def rbf_kernel(
     X: np.ndarray,
     X_prime: np.ndarray,
-    A: float,
-    ls: float,
+    A: float = 1.0,
+    ls: float = 2.0,
 ) -> np.ndarray:
     """
     Parameters
