@@ -13,6 +13,9 @@ import pickle
 import pandas as pd
 
 
+# ------------------- DATASETS -------------------
+
+
 def create_S_dataset(n_instances=1000, shuffle=True):
     """Generates a dataset with a S shape"""
     ## Generate data
@@ -44,6 +47,9 @@ def get_digits_dataset(n_class=10):
     return X, y
 
 
+# ------------------- PICKLES -------------------
+
+
 def pickle_dump(object, n_class, pickles_path="./pickles"):
     """
     Given an object, dumps it into a file.
@@ -64,10 +70,46 @@ def pickle_load(n_class, pickles_path="./pickles"):
     return clf_results
 
 
-def compute_error_tables(clf_results_array, agglomerated_results_array, model_names):
-    raise NotImplementedError
+# ------------------- TABLE COMPUTATION -------------------
 
-    return train_error_table, test_error_table, cv_error_table
+
+def compute_error_tables(agglomerated_results_array, model_names):
+    train_errors = np.array(
+        [
+            [1.0 - model["train_score"] for model in models]
+            for models in agglomerated_results_array
+        ]
+    )
+    train_error_table = pd.DataFrame(columns=model_names)
+    train_error_table["Mean search time (per CV fold)"] = np.sum(train_errors, axis=0)
+    train_error_table["Std search time (per CV fold)"] = np.std(train_errors, axis=0)
+
+    test_errors = np.array(
+        [
+            [1.0 - model["test_score"] for model in models]
+            for models in agglomerated_results_array
+        ]
+    )
+    test_error_table = pd.DataFrame(columns=model_names)
+    test_error_table["Mean search time (per CV fold)"] = np.sum(test_errors, axis=0)
+    test_error_table["Std search time (per CV fold)"] = np.std(test_errors, axis=0)
+
+    return (
+        train_error_table,
+        test_error_table,
+    )
+
+
+def compute_cv_error(clf_results_array, model_n, split=0):
+    colum_names = ["params set {}".format(i) for i in len(clf_results_array[0])]
+    results = clf_results_array[split][model_n].cv_results_
+
+    cv_error_table = pd.DataFrame(columns=colum_names)
+    cv_error_table["CV mean train error"] = 1.0 - results["mean_train_score"]
+    cv_error_table["CV std train error"] = results["std_train_score"]
+    cv_error_table["CV mean test error"] = 1.0 - results["mean_test_score"]
+    cv_error_table["CV std test error"] = results["std_test_score"]
+    return cv_error_table
 
 
 def compute_time_tables(agglomerated_results_array, model_names):
