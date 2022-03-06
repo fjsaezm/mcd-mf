@@ -57,8 +57,6 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
 
         n_instances, n_features = np.shape(X)
 
-        print(self.w.shape)
-        print(X.shape)
         if (np.shape(self.w)[1] != n_features):
             raise ValueError('Different # of features for X and w.')
 
@@ -71,12 +69,12 @@ class RandomFeaturesSampler(BaseEstimator, TransformerMixin):
             normalization_factor = np.sqrt(self._n_random_samples_w)
 
         elif self.sampling_method == 'cos':
-
-            """Q7. Implement the sampling method based
-            on the second type of random features.
-            """
-            #  <YOUR CODE HERE>
-
+            b = np.random.default_rng().uniform( low = 0.0,
+                                                high = 2.0*np.pi,
+                                                size = self._n_random_samples_w )
+            random_features = np.cos( X @ self.w.T + b )
+            normalization_factor = 1.0/np.sqrt(2.0/self._n_random_samples_w)
+                                     
         else:
             raise ValueError('Please enter a correct sampling method')
 
@@ -90,9 +88,9 @@ class RandomFeaturesSamplerRBF(RandomFeaturesSampler):
 
     def __init__(
         self,
-        n_features_sampled: int,
-        sampling_method: str,
-        sigma_kernel: float
+        n_features_sampled: int = 100,
+        sampling_method: str = 'sin+cos',
+        sigma_kernel: float = 2.0
     ) -> None:
         super().__init__(n_features_sampled, sampling_method)
         self.sigma_kernel = sigma_kernel
@@ -212,15 +210,9 @@ class RandomFeaturesSamplerExp(RandomFeaturesSampler):
         # Declare the inverse cdf needed for inverse sampling method
         cauchy_inverse_cdf = lambda p,gamma : (1/gamma)* np.tan(np.pi*(p-0.5))
 
-
         rng = np.random.default_rng()
-        U = rng.random((X.shape[0],self._n_random_samples_w))
-        print(X.shape)
-        print(U.shape)
-
-        self.w = cauchy_inverse_cdf(U,self.length_scale_kernel)
-        print(self.w.shape)
-        print("---")
+        U = rng.random((self._n_random_samples_w, X.shape[1]))
+        self.w = cauchy_inverse_cdf(U, self.length_scale_kernel)
 
         return self
 
@@ -342,10 +334,8 @@ def demo_kernel_approximation_features(
     axes[0].set_yticks([])
 
     for features_sampler, ax in zip(features_samplers, axes[1:]):
-        print('# of random features = ', features_sampler.n_features_sampled)
 
         X_features = features_sampler.fit_transform(X)
-        print("omega")
 
         kernel_matrix_approx = X_features @ X_features.T
 
@@ -376,6 +366,8 @@ def generate_curve_dataset(n_instances = 1000):
     Generates an 3-dimensional S given a number of instances
     """
     X,t = datasets.make_s_curve(n_instances, noise = 0.1)
+    X = X[np.argsort(t)]
+   
     return X,t
 
 
@@ -384,4 +376,38 @@ def plot_curve_dataset(data,t):
     fig = plt.figure(figsize=(15,5))
     ax = fig.add_subplot(projection='3d')
     ax.scatter(data[:,0], data[:,1],data[:,2], c = t, cmap = plt.cm.Spectral)
+    ax.view_init(10,80)
     plt.show()
+
+
+def plot_kernel_approximation_error(
+    X: np.ndarray,
+    kernel: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    features_samplers: List[Union[Rlength_scale_kernelandomFeaturesSampler, NystroemFeaturesSampler]],
+    n_features : np.ndarray,
+    error_function : Callable[[np.array]]
+    ) -> None:
+    """
+    Kernel approximation using random sampled features.
+    Either RFF or Nyström features.
+    """
+
+    kernel_matrix = kernel(X, X)
+
+    means = []
+    for features_sampler  in features_samplers:
+        X_features = features_sampler.fit_transform(X)
+        kernel_matrix_approx = X_features @ X_features.T
+        err_approx = kernel_matrix - kernel_matrix_approx
+        means.append(np.mean(np.abs(err_approx)))
+
+    values = error_function(n_features)
+    fig = plt.figure(figsize=(15,5))
+    ax = fig.add_subplot()
+    ax.plot(n_features, means, color= "tomato", label="Mean error")
+    ax.plot(n_features, values,color = "dodgerblue", label = "$1/\sqrt{n}$")
+    ax.legend()
+    ax.set_title("Comparison of estimated MC error and theoretical MC error")
+    plt.show()
+
+    
