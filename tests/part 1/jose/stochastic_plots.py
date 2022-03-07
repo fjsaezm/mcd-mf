@@ -150,10 +150,10 @@ def plot_train_and_test_error(
     test_errors = []
 
     for n_f in n_features:
-        # print("\t n_features: {}".format(n_f))
-
         # Set number of features to use
-        model.n_features_sampled = n_f
+        # The first element of the pipeline is the kernel approximation
+        #
+        model[0].n_features_sampled = n_f
 
         # Fit the model
         model = model.fit(X_train, y_train)
@@ -168,6 +168,7 @@ def plot_train_and_test_error(
     ax.plot(n_features, train_errors, color=color, label="Train error")
     ax.plot(n_features, test_errors, color=color_test, label="Test error")
     ax.set_xlabel("n features")
+    ax.legend()
 
     # Setting the title
     if title != "":
